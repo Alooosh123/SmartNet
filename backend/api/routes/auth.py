@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Optional
 from pathlib import Path
 import uuid
@@ -326,6 +327,7 @@ async def list_registrations(db: AsyncSession = Depends(database.get_db), curren
 @router.post('/registrations/{reg_id}/verify-manual')
 async def verify_manual_payment(
     reg_id: int,
+    payload: schemas.ManualPaymentVerification,
     db: AsyncSession = Depends(database.get_db),
     current_admin = Depends(get_current_admin),
 ):
@@ -343,23 +345,108 @@ async def verify_manual_payment(
         raise HTTPException(status_code=404, detail="طلب التسجيل غير موجود")
     if reg.processed:
         raise HTTPException(status_code=409, detail="تم اعتماد هذا الطلب مسبقاً")
-    if reg.paid:
-        return {"ok": True, "paid": True, "processed": False, "detail": "الدفع مسجل كمؤكد مسبقاً"}
 
+    expected_amount = Decimal(str(reg.price or 0))
+    if payload.currency != "USD" or payload.amount != expected_amount:
+        raise HTTPException(status_code=409, detail=f"المبلغ/العملة لا يطابقان الطلب: المطلوب {expected_amount} USD.")
+
+    existing_payment = await db.execute(
+        select(models.ManualPayment).where(models.ManualPayment.registration_id == reg.id)
+    )
+    already_verified = existing_payment.scalars().first()
+    if already_verified:
+        return {
+            "ok": True, "paid": True, "processed": False,
+            "payment_id": already_verified.id, "idempotent": True,
+            "message": "تم تسجيل هذا الدفع والتحقق منه مسبقاً.",
+        }
+
+    duplicate_reference = await db.execute(
+        select(models.ManualPayment).where(models.ManualPayment.reference == payload.reference)
+    )
+    if duplicate_reference.scalars().first():
+        raise HTTPException(status_code=409, detail="رقم مرجع الدفع مستخدم في طلب آخر.")
+    if reg.paid:
+        raise HTTPException(status_code=409, detail="الطلب مسجل كمدفوع دون سجل تحقق يدوي. راجع تقرير المطابقة.")
+
+    payment = models.ManualPayment(
+        registration_id=reg.id,
+        payment_method=payload.payment_method,
+        reference=payload.reference,
+        amount=payload.amount,
+        currency=payload.currency,
+        notes=payload.notes,
+        verified_by=getattr(current_admin, "username", "admin"),
+    )
+    db.add(payment)
     reg.paid = True
-    if not reg.payment_ref or reg.payment_ref.startswith("smartnet-"):
-        reg.payment_ref = f"manual-{reg.id}-{uuid.uuid4().hex}"
+    reg.payment_ref = f"manual:{payload.reference}"
     db.add(models.AuditLog(
         action="manual_payment_verified",
         performed_by=getattr(current_admin, "username", "admin"),
-        details=f"Administrator manually verified money receipt for registration #{reg.id}; client activation remains pending",
+        details=(
+            f"Verified manual payment for registration #{reg.id}; method={payload.payment_method}; "
+            f"reference={payload.reference}; amount={payload.amount} {payload.currency}; activation pending"
+        ),
     ))
     await db.commit()
+    await db.refresh(payment)
     return {
-        "ok": True,
-        "paid": True,
-        "processed": False,
-        "message": "تم تسجيل تأكيد وصول المبلغ. يجب اعتماد الاشتراك بصورة منفصلة لتفعيل الحساب.",
+        "ok": True, "paid": True, "processed": False, "payment_id": payment.id,
+        "message": "تم توثيق الدفع. لا يزال تفعيل الحساب خطوة منفصلة تتطلب اعتماد الإدارة.",
+    }
+
+
+@router.get('/payments/reconciliation')
+async def payment_reconciliation(
+    db: AsyncSession = Depends(database.get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Read-only comparison between subscription requests and verified manual-payment records."""
+    registrations_result = await db.execute(
+        select(models.RegistrationRequest).order_by(models.RegistrationRequest.id.desc())
+    )
+    payments_result = await db.execute(select(models.ManualPayment))
+    payments = {item.registration_id: item for item in payments_result.scalars().all()}
+    counts = {
+        "awaiting_payment": 0, "awaiting_review": 0,
+        "verified_pending_approval": 0, "completed": 0, "exceptions": 0,
+    }
+    items = []
+    for registration in registrations_result.scalars().all():
+        payment = payments.get(registration.id)
+        state = "awaiting_payment"
+        severity = "info"
+        if registration.processed and not payment:
+            state, severity = "activated_without_payment_record", "critical"
+        elif registration.paid and not payment:
+            state, severity = "paid_without_manual_record", "critical"
+        elif payment and not registration.paid:
+            state, severity = "payment_record_without_paid_flag", "critical"
+        elif payment and registration.processed:
+            state = "completed"
+        elif payment:
+            state = "verified_pending_approval"
+        elif registration.receipt_image:
+            state = "awaiting_review"
+
+        if severity == "critical":
+            counts["exceptions"] += 1
+        elif state in counts:
+            counts[state] += 1
+        items.append({
+            "registration_id": registration.id, "username": registration.username,
+            "expected_amount": registration.price, "currency": "USD",
+            "paid_flag": registration.paid, "activated": registration.processed,
+            "payment_record_id": payment.id if payment else None,
+            "payment_reference": payment.reference if payment else registration.payment_ref,
+            "verified_amount": str(payment.amount) if payment else None,
+            "payment_method": payment.payment_method if payment else None,
+            "status": state, "severity": severity,
+        })
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "mode": "manual", "summary": counts, "items": items, "read_only": True,
     }
 
 
@@ -379,6 +466,14 @@ async def approve_registration(
         raise HTTPException(status_code=400, detail="تمت معالجة هذا الطلب مسبقاً")
     if not reg.paid:
         raise HTTPException(status_code=400, detail="لا يمكن تفعيل المشترك قبل تأكيد الدفع")
+    payment_result = await db.execute(
+        select(models.ManualPayment).where(models.ManualPayment.registration_id == reg.id)
+    )
+    if payment_result.scalars().first() is None:
+        raise HTTPException(
+            status_code=409,
+            detail="لا يوجد سجل تحقق مالي لهذا الطلب. راجع المطابقة المالية ولا تفعّل الحساب.",
+        )
 
     plan_key = reg.plan or "monthly"
     plan_info = PLANS.get(plan_key, PLANS["monthly"])
