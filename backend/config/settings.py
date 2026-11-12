@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import List, Optional
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 
 class Settings(BaseSettings):
@@ -35,9 +36,11 @@ class Settings(BaseSettings):
     SSID: str = "SmartNet-WiFi"
 
     DATABASE_URL: str = "sqlite+aiosqlite:///./smartnet.db"
-    POSTGRES_DB: Optional[str] = None
-    POSTGRES_USER: Optional[str] = None
-    POSTGRES_PASSWORD: Optional[str] = None
+    NETWORK_OBSERVER_ENABLED: bool = True
+    NETWORK_OBSERVER_INTERVAL_SECONDS: int = 60
+    NETWORK_OBSERVER_HISTORY_LIMIT: int = 500
+    NETWORK_ALERT_CPU_THRESHOLD: int = 85
+    NETWORK_ALERT_FREE_MEMORY_MB: int = 32
 
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o-mini"
@@ -84,8 +87,11 @@ class Settings(BaseSettings):
                 raise ValueError("MIKROTIK_DEMO_MODE must be false in production.")
             if not self.MIKROTIK_PASSWORD:
                 raise ValueError("MIKROTIK_PASSWORD is required in production.")
-            if not self.DATABASE_URL.startswith("postgresql+asyncpg://"):
-                raise ValueError("Production must use PostgreSQL.")
+            if not self.DATABASE_URL.startswith("mysql+asyncmy://"):
+                raise ValueError("Production must use MariaDB via mysql+asyncmy://.")
+            database_url = make_url(self.DATABASE_URL)
+            if not database_url.username or not database_url.password or not database_url.host or not database_url.database:
+                raise ValueError("DATABASE_URL must include a MariaDB username, password, host and database.")
             if self.PAYMENT_PROVIDER_MODE not in {"manual", "gateway"}:
                 raise ValueError("PAYMENT_PROVIDER_MODE must be 'manual' or 'gateway'.")
             if self.PAYMENT_PROVIDER_MODE == "gateway" and not self.PAYMENT_CHECKOUT_URL:
@@ -100,6 +106,12 @@ class Settings(BaseSettings):
                 raise ValueError("At least one exact HTTPS CORS origin is required in production.")
             if any(not origin.startswith("https://") for origin in self.CORS_ORIGINS):
                 raise ValueError("Production CORS_ORIGINS must contain only HTTPS origins.")
+        if self.NETWORK_OBSERVER_INTERVAL_SECONDS < 15:
+            raise ValueError("NETWORK_OBSERVER_INTERVAL_SECONDS must be at least 15 seconds.")
+        if self.NETWORK_OBSERVER_HISTORY_LIMIT < 10:
+            raise ValueError("NETWORK_OBSERVER_HISTORY_LIMIT must be at least 10.")
+        if not 1 <= self.NETWORK_ALERT_CPU_THRESHOLD <= 100:
+            raise ValueError("NETWORK_ALERT_CPU_THRESHOLD must be between 1 and 100.")
         return self
 
 
