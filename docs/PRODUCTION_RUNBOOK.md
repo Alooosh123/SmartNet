@@ -1,59 +1,77 @@
-# SmartNet Production Runbook
+# SmartNet Production Runbook (Native Services)
 
 ## Local development
+1. Copy root .env.example to backend/.env.
+2. Keep ENVIRONMENT=development, PAYMENT_DEMO_MODE=true and MIKROTIK_DEMO_MODE=true only for isolated development.
+3. From backend: create Python 3.11 venv, install requirements-dev.txt and run uvicorn app:app --reload --host 127.0.0.1 --port 8000.
+4. From frontend: copy .env.example to .env.local, run npm install and npm run dev.
+5. Open http://127.0.0.1:5173. The first development administrator is created from DASHBOARD_USERNAME and DASHBOARD_PASSWORD. Change it after first login.
+6. Optional Telegram bot: python -m bot.main_bot, with a real bot token and numeric admin IDs.
 
-1. Copy the root `.env.example` to `backend/.env`.
-2. Keep `ENVIRONMENT=development`, `PAYMENT_DEMO_MODE=true` and
-   `MIKROTIK_DEMO_MODE=true` only for local development.
-3. Start the backend from the `backend` directory with
-   `uvicorn app:app --reload --port 8000`.
-4. Copy `frontend/.env.example` to `frontend/.env.local`, then run
-   `npm install` and `npm run dev` from `frontend`.
-5. Open `http://localhost:5173`. The first development administrator is created
-   from `DASHBOARD_USERNAME` and `DASHBOARD_PASSWORD` at backend startup. Change
-   this password after login using the sidebar password-change action.
-6. The optional Telegram bot runs from `backend` using
-   `python -m bot.main_bot`. It requires a bot token and a JSON list of numeric
-   administrator Telegram IDs.
+## Production stack
+- MariaDB 11.8 LTS replaces PostgreSQL.
+- Caddy 2 handles HTTPS, reverse proxy and frontend static assets.
+- Native Windows services via WinSW or Linux systemd replace Docker/Compose.
+- SQLAlchemy asynchronous database driver: asyncmy.
+- No Docker, Docker Compose or Nginx deployment assets remain in this branch.
 
-## Production
+Do not change a PostgreSQL connection string to MariaDB and assume data has migrated. Existing PostgreSQL data requires a verified backup and a staging export/transform/import, with row counts, financial totals, relationships and file paths checked before cutover.
 
-Production requires the operator to supply provider and infrastructure values;
-SmartNet does not invent payment endpoints, API keys or router credentials.
+## Required production environment
+- ENVIRONMENT=production.
+- Unique random SECRET_KEY and PAYMENT_WEBHOOK_SECRET, each 32+ characters.
+- Non-default DASHBOARD_USERNAME and strong unique DASHBOARD_PASSWORD.
+- DATABASE_URL=mysql+asyncmy://... to MariaDB 11.8.
+- MIGRATION_DATABASE_URL=mysql+asyncmy://... with a dedicated DDL account, separate from the runtime account.
+- PAYMENT_PROVIDER_MODE=manual until a provider-specific adapter is implemented and validated.
+- PAYMENT_DEMO_MODE=false.
+- MIKROTIK_DEMO_MODE=false, with actual router host/user/password/port reachable only over VPN/private management network.
+- Exact HTTPS CORS_ORIGINS.
+- MARIADB_* backup environment variables.
+- NETWORK_OBSERVER_ENABLED=true and reviewed thresholds.
 
-Required environment values:
-- `ENVIRONMENT=production`
-- unique random `SECRET_KEY` and `PAYMENT_WEBHOOK_SECRET` (32+ characters each)
-- non-default `DASHBOARD_USERNAME` and strong unique `DASHBOARD_PASSWORD`
-- unique `POSTGRES_PASSWORD` with at least 16 characters
-- PostgreSQL `DATABASE_URL` using `postgresql+asyncpg://`
-- `PAYMENT_PROVIDER_MODE=manual` for administrator-verified wallet/bank transfers, or `PAYMENT_PROVIDER_MODE=gateway` plus actual `PAYMENT_CHECKOUT_URL` and a provider-specific signature-verification adapter
-- `PAYMENT_DEMO_MODE=false`
-- `MIKROTIK_DEMO_MODE=false`, real router host/user/password/port
-- exact HTTPS `CORS_ORIGINS`
-- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` for Compose
+Runtime DB account should have SELECT/INSERT/UPDATE/DELETE only. Alembic migration runs use the separate DDL-capable account. Store secrets in protected service environment or a secrets manager.
 
-1. Copy root `.env.example` to `.env` and replace every example value.
-2. For manual wallet/bank transfer mode, use the private receipt review flow: an
-   administrator checks the actual account, records manual payment verification,
-   then approves the subscription. For gateway mode, configure a provider-specific
-   adapter. The generic callback is only an internal trusted callback boundary;
-   the adapter must validate the provider's signature, event uniqueness,
-   registration reference, settled amount and currency.
-3. Configure a least-privilege MikroTik API account and make the router reachable
-   only over a VPN/private network. Do not expose RouterOS API ports publicly.
-4. Review `SECURITY.md`, then deploy with `docker compose up -d --build`.
-5. Verify `/api/health/ready`, login, permissions, router commands, payment callbacks,
-   PDF storage and receipt privacy.
-6. Take a database and uploads backup, then perform a restore test before launch.
+## Deployment procedure
+Follow deploy/README.md for the full installation guide.
+1. Install MariaDB and create database, application, migration and backup accounts.
+2. Create protected backend/.env; URL-encode reserved characters inside SQLAlchemy URLs.
+3. Create the Python environment and install backend/requirements.txt.
+4. Build frontend with npm install, npm audit --audit-level=moderate and npm run build.
+5. Run alembic upgrade head explicitly before starting the backend.
+6. Configure Caddy with the public domain and frontend/dist; validate HTTPS.
+7. Install and start the backend service using systemd or WinSW.
+8. Expose only ports 80/443. Keep backend 8000 and MariaDB 3306 private. Never expose RouterOS API publicly.
+9. Verify /api/health/ready, authentication, authorization, private receipt/PDF access, network observations and audit logs.
+10. Complete controlled MikroTik and payment acceptance checks before serving real subscribers.
 
-## Important limitations
+## Manual payment operations
+Until official provider API docs and sandbox/live credentials are supplied, use manual transfer verification:
+1. Customer creates a registration and may upload a receipt image.
+2. Finance reviewer independently checks the settled incoming transfer in the wallet/bank account.
+3. Reviewer enters unique transaction reference, exact amount, currency and explanatory note.
+4. Backend checks expected amount/currency and rejects a reused reference.
+5. A separately authorized administrator approves the subscription.
+6. Use the financial report and normalized CSV upload to identify matched, mismatched, external-only and internal-only records. CSV reconciliation is read-only and does not activate accounts.
+Receipt images alone never count as payment. A real gateway needs a provider-specific adapter validating signatures, event IDs, settlement, registration reference, amount and currency.
 
-- The repository does not contain real payment-provider credentials or a provider-
-  specific signature-verification adapter. Payment cannot be declared production
-  ready until the selected provider is integrated and its sandbox/live flows pass.
-- Live MikroTik operations require a reachable configured router and profiles that
-  already exist on that router. Run a controlled acceptance test before serving users.
-- Telegram is optional and only starts when the operator supplies a token and IDs.
-- The initial Alembic baseline is intended for new databases. Existing PostgreSQL
-  installations must be backed up and reviewed before migration.
+## Network operations and agents
+- Network Observer reads RouterOS resources and active sessions only; it stores aggregate metrics and does not write to RouterOS.
+- Diagnostic agent uses observations and a curated MikroTik reference file; optional OpenAI adds natural-language summarization, with no RouterOS action tools.
+- Annual/semi-annual customers can request permitted operations; network-changing customer actions require administrator review before execution.
+- /mikrotik/users and detailed session identities are administrator-only.
+
+## Backup and restore
+Back up MariaDB and backend/uploads separately.
+- Linux: deploy/scripts/backup-mariadb.sh and deploy/scripts/restore-mariadb.sh.
+- Windows: deploy/windows/backup-mariadb.ps1 and deploy/windows/restore-mariadb.ps1.
+Restore scripts require explicit confirmation. Verify SHA256 and rehearse restoration of both database and uploads in a maintenance environment before launch.
+
+## Security and production blockers
+- Run pip-audit -r backend/requirements.txt --strict and npm audit --audit-level=moderate.
+- CI must pass compile, backend tests, browser E2E, dependency audits, MariaDB migrations and backup/restore.
+- Real MikroTik connection cannot be verified until an isolated router and credentials are supplied.
+- Real provider payment cannot be verified until a provider is selected and official API/sandbox credentials are supplied; manual transfer review is the operational option meanwhile.
+- Production deploy cannot be verified until domain, TLS, target host and rollback plan are available.
+- Back up the database and uploads and perform a successful restore before launch.
+- Rotate credentials previously committed in Git history; removing files from the current tree does not remove history.
