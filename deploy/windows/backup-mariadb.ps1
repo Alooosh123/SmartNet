@@ -20,7 +20,7 @@ try {
     $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($env:USERNAME,"FullControl","Allow")
     $acl.SetAccessRule($rule)
     Set-Acl $defaults $acl
-    & (Join-Path $MariaDbBin "mariadb-dump.exe") "--defaults-extra-file=$defaults" --single-transaction --quick --routines --triggers --events --hex-blob --add-drop-table --result-file=$target $env:MARIADB_DATABASE
+    & (Join-Path $MariaDbBin "mariadb-dump.exe") "--defaults-extra-file=$defaults" --single-transaction --quick --triggers --hex-blob --add-drop-table --result-file=$target $env:MARIADB_DATABASE
     if ($LASTEXITCODE -ne 0) { throw "mariadb-dump failed with exit code $LASTEXITCODE" }
     $hash = Get-FileHash -Algorithm SHA256 $target
     "$($hash.Hash)  $(Split-Path $target -Leaf)" | Set-Content -Encoding Ascii "$target.sha256"
