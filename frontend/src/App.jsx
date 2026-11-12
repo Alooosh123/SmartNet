@@ -247,7 +247,18 @@ function App() {
         api(`/client/chat?username=${encodeURIComponent(username)}`, token),
         api("/mikrotik/status", token),
       ]);
-      if (results[0].status === "fulfilled") setUserProfile(results[0].value);
+      if (results[0].status === "fulfilled") {
+        setUserProfile(results[0].value);
+        if (results[0].value.can_manage_cards) {
+          try {
+            setBatches(await api("/cards/batches", token));
+          } catch (err) {
+            setError(err.message);
+          }
+        } else {
+          setBatches([]);
+        }
+      }
       if (results[1].status === "fulfilled") setChatQuota(results[1].value);
       if (results[2].status === "fulfilled") setChatMessages(results[2].value);
       if (results[3].status === "fulfilled") setRouter(results[3].value);
@@ -342,7 +353,11 @@ function App() {
   }
 
   const isAdmin = role === "admin";
-  const navItems = isAdmin ? nav : clientNav;
+  const navItems = isAdmin
+    ? nav
+    : userProfile?.can_manage_cards
+      ? [...clientNav, { id: "cards", label: "كروت الهوت سبوت", icon: Layers3 }]
+      : clientNav;
   const activeClients = clients.filter(c=>c.is_active).length;
   const pending = registrations.filter(r=>!r.processed).length;
   const filteredClients = useMemo(() => clients.filter(c => c.username.toLowerCase().includes(search.toLowerCase())), [clients, search]);
@@ -405,6 +420,7 @@ function App() {
             <div className="panel"><div className="panel-head"><h3><MessageCircle size={18}/> الدعم الذكي</h3></div>
               <p className="muted">استخدم المساعد للاستفسار عن باقتك أو مشاكل الاتصال أو طلب الدعم.</p>
               <button className="primary full" onClick={()=>setPage("chat")}>فتح المساعد الذكي</button>
+              {userProfile?.can_reboot_network && <button className="danger-btn full" onClick={reboot}><Power size={16}/> إعادة تشغيل الشبكة</button>}
             </div>
           </div>
         </section>)}
