@@ -12,7 +12,7 @@ The local development profile uses SQLite and simulated MikroTik data. It is not
 
 ## 2. MariaDB and Podman deployment
 
-The production target is MariaDB 11.4 + Podman Compose. Docker and PostgreSQL are not used by the supported deployment path.
+The production target is MariaDB 11.4 + Podman Compose. Docker and PostgreSQL are not used by the supported deployment path. Optional services are started by explicit service name because podman-compose 1.0.6 does not support the Compose `--profile` CLI flag.
 
 1. Install Podman Desktop/Podman and a Compose provider. On Windows initialise and start the Podman machine. On Linux prefer rootless Podman.
 2. Copy root `.env.example` to root `.env`; replace every example secret.
