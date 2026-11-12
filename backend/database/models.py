@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Numeric
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Numeric, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database.database import Base
@@ -34,6 +34,7 @@ class Card(Base):
 
 class RegistrationRequest(Base):
     __tablename__ = "registration_requests"
+    __table_args__ = (UniqueConstraint("payment_ref", name="uq_registration_payment_ref"),)
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
