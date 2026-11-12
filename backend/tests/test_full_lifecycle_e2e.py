@@ -103,6 +103,12 @@ def _approve_manually(client, admin_headers, registration):
     response = client.post(
         f"/auth/registrations/{registration['registration_id']}/verify-manual",
         headers=admin_headers,
+        json={
+            "amount": 100 if registration["registration_id"] > 0 else 20,
+            "currency": "USD",
+            "payment_method": "mobile_wallet",
+            "reference": f"E2E-transfer-{registration['registration_id']}",
+        },
     )
     assert response.status_code == 200, response.text
     assert response.json()["paid"] is True
