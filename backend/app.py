@@ -158,6 +158,32 @@ app = FastAPI(title="SmartNet API", version="1.1.0", lifespan=lifespan)
 _RATE_LIMIT_BUCKETS: dict[tuple[str, str], deque[float]] = {}
 
 
+def _consume_rate_limit(
+    client_ip: str,
+    route_key: str,
+    limit: int,
+    window_seconds: int,
+    now: float | None = None,
+) -> int | None:
+    """Return Retry-After when blocked; otherwise record the request and return None."""
+    current_time = monotonic() if now is None else now
+    key = (client_ip, route_key)
+    events = _RATE_LIMIT_BUCKETS.setdefault(key, deque())
+    while events and current_time - events[0] >= window_seconds:
+        events.popleft()
+    if len(events) >= limit:
+        return max(1, int(window_seconds - (current_time - events[0])))
+    events.append(current_time)
+    if len(_RATE_LIMIT_BUCKETS) > 10000:
+        expired_before = current_time - window_seconds
+        for bucket_key, bucket in list(_RATE_LIMIT_BUCKETS.items()):
+            while bucket and bucket[0] < expired_before:
+                bucket.popleft()
+            if not bucket:
+                _RATE_LIMIT_BUCKETS.pop(bucket_key, None)
+    return None
+
+
 def _rate_limit_policy(method: str, path: str):
     if method != "POST":
         return None
@@ -187,29 +213,13 @@ async def enforce_request_rate_limits(request: Request, call_next):
 
     route_key, limit, window_seconds = policy
     client_ip = request.client.host if request.client else "unknown"
-    key = (client_ip, route_key)
-    now = monotonic()
-    events = _RATE_LIMIT_BUCKETS.setdefault(key, deque())
-    while events and now - events[0] >= window_seconds:
-        events.popleft()
-
-    if len(events) >= limit:
-        retry_after = max(1, int(window_seconds - (now - events[0])))
+    retry_after = _consume_rate_limit(client_ip, route_key, limit, window_seconds)
+    if retry_after is not None:
         return JSONResponse(
             status_code=429,
             content={"detail": "تم تجاوز عدد المحاولات المسموح. حاول مجدداً بعد قليل."},
             headers={"Retry-After": str(retry_after)},
         )
-
-    events.append(now)
-    # Bound memory use if a server receives requests from many short-lived IPs.
-    if len(_RATE_LIMIT_BUCKETS) > 10000:
-        expired_before = now - window_seconds
-        for bucket_key, bucket in list(_RATE_LIMIT_BUCKETS.items()):
-            while bucket and bucket[0] < expired_before:
-                bucket.popleft()
-            if not bucket:
-                _RATE_LIMIT_BUCKETS.pop(bucket_key, None)
     return await call_next(request)
 
 is_development = settings.ENVIRONMENT.lower() != "production"
