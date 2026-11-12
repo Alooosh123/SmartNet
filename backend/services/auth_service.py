@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 
 from config.settings import settings
@@ -32,7 +32,7 @@ class AuthService:
     def verify_token(self, token: str) -> Optional[Dict[str, Any]]:
         try:
             return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        except JWTError:
+        except jwt.InvalidTokenError:
             return None
 
 
