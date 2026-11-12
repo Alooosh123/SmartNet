@@ -32,7 +32,6 @@ def _production_settings(**overrides):
         "DATABASE_URL": "mysql+asyncmy://smartnet_app:runtime-secret@127.0.0.1:3306/smartnet",
         "MIGRATION_DATABASE_URL": "mysql+asyncmy://smartnet_migrator:migration-secret@127.0.0.1:3306/smartnet",
         "PAYMENT_PROVIDER_MODE": "manual",
-        "POSTGRES_PASSWORD": "postgres-strong-password-2026",
         "CORS_ORIGINS": ["https://smartnet.example"],
     }
     values.update(overrides)
