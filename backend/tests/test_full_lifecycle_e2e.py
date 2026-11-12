@@ -184,6 +184,24 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
     assert mismatch.status_code == 400
     _approve_manually(client, admin_headers, registration, payment_reference="bankref-shared-unique")
 
+    statement = b"reference,amount,currency,status\\nbankref-shared-unique,100,USD,settled\\n"
+    reconciliation = client.post(
+        "/auth/reconciliation/statement",
+        headers=admin_headers,
+        files={"file": ("statement.csv", statement, "text/csv")},
+    )
+    assert reconciliation.status_code == 200, reconciliation.text
+    assert reconciliation.json()["mutations_performed"] is False
+    assert len(reconciliation.json()["matched"]) == 1
+    mismatch_statement = b"reference,amount,currency,status\\nbankref-shared-unique,99,USD,settled\\n"
+    mismatch_report = client.post(
+        "/auth/reconciliation/statement",
+        headers=admin_headers,
+        files={"file": ("mismatch.csv", mismatch_statement, "text/csv")},
+    )
+    assert mismatch_report.status_code == 200
+    assert len(mismatch_report.json()["mismatches"]) == 1
+
     approved_status = client.get(
         f"/auth/registrations/{registration['registration_id']}/status",
         headers=status_headers,
