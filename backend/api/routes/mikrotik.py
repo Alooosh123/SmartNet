@@ -170,7 +170,7 @@ async def approve_network_operation(
     current_admin=Depends(get_current_admin),
 ):
     row = (await db.execute(
-        select(models.NetworkOperation).where(models.NetworkOperation.id == operation_id)
+        select(models.NetworkOperation).where(models.NetworkOperation.id == operation_id).with_for_update()
     )).scalars().first()
     if row is None:
         raise HTTPException(status_code=404, detail="طلب العملية غير موجود.")
