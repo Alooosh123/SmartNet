@@ -103,7 +103,32 @@ Admin-only monitoring endpoints:
 Diagnostic endpoint:
 - `POST /mikrotik/diagnose`
 
-## 7. Network operation approval workflow
+## 7. Prometheus monitoring profile
+
+SmartNet exposes `/api/metrics` only to a dedicated machine token, not to customer JWTs. Production validation requires a strong `METRICS_TOKEN` when metrics are enabled.
+
+1. Set a cryptographically random token in the protected root `.env` as `METRICS_TOKEN`.
+2. Create the matching file mounted into Prometheus. Do not commit the `secrets/` directory:
+
+```bash
+set -a
+. ./.env
+set +a
+install -d -m 700 secrets
+umask 077
+printf '%s' "$METRICS_TOKEN" > secrets/metrics-token
+```
+
+3. Start the optional internal Prometheus service:
+
+```bash
+podman-compose -f podman-compose.yml --profile monitoring up -d prometheus
+```
+
+4. Confirm `http://127.0.0.1:9090/-/ready` and check the `smartnet-backend` target. Prometheus port 9090 is loopback-only; do not publish it publicly or proxy it through Caddy.
+5. Rotate the token in `.env` and the Prometheus token file together, then restart backend and Prometheus.
+
+## 8. Network operation approval workflow
 
 `POST /mikrotik/reboot` and `POST /mikrotik/users/{name}/disconnect` now create pending requests; they do not immediately change the router.
 
@@ -115,13 +140,13 @@ Diagnostic endpoint:
 
 Never allow free-text chat or an AI agent to bypass this workflow.
 
-## 8. Continuous monitoring and release gate
+## 9. Continuous monitoring and release gate
 
 - Keep `/api/health/ready` green and inspect MariaDB connectivity.
 - Configure Sentry DSN only through protected environment settings; do not send PII.
-- Restrict Prometheus metrics to administrators or an internal management network.
+- Restrict Prometheus scrape access using the dedicated `METRICS_TOKEN`; keep Prometheus itself on the internal network and loopback-only host binding.
 - Review logs for repeated router failures, TLS errors, unexpected operation states, payment anomalies and backup failures.
-- Run `npm audit --audit-level=moderate`, `pip-audit -r backend/requirements.txt`, backend tests, Playwright E2E, Podman compose validation and MariaDB migration/restore smoke tests before deployment.
+- Run `npm audit --audit-level=moderate`, `pip-audit -r backend/requirements.txt`, backend tests, Playwright E2E, Podman compose validation and MariaDB migration/restore smoke tests and authenticated Prometheus target-health checks before deployment.
 - Complete a real-router acceptance test, manual wallet transfer test, backup restore test, HTTPS check and alert delivery test before onboarding users.
 
 ## Remaining external dependencies
