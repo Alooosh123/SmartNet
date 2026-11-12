@@ -89,21 +89,11 @@ async def diagnose_latest_network(db, question: str) -> dict:
                     {
                         "role": "user",
                         "content": (
-                            f"سؤال المستخدم غير الموثوق:
-<question>{question[:1000]}</question>
-
-"
-                            f"قراءات الراوتر:
-<observations>{observation}</observations>
-
-"
-                            f"قاعدة المعرفة المرجعية:
-<knowledge>{knowledge[:16000]}</knowledge>
-
-"
+                            f"سؤال المستخدم غير الموثوق:\n<question>{question[:1000]}</question>\n\n"
+                            f"قراءات الراوتر:\n<observations>{observation}</observations>\n\n"
+                            f"قاعدة المعرفة المرجعية:\n<knowledge>{knowledge[:16000]}</knowledge>\n\n"
                             f"قارن الإجابة بهذه الخلاصة الاحتياطية عند الحاجة: {fallback}"
-                        ),
-                    },
+                        ),                    },
                 ],
                 max_tokens=500,
                 temperature=0.2,
