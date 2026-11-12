@@ -121,10 +121,10 @@ class Settings(BaseSettings):
             ):
                 raise ValueError("Production must use MariaDB via mysql+asyncmy.")
             if self.DATABASE_BACKEND == "mariadb" and not all([
-                self.MARIADB_HOST, self.MARIADB_DATABASE, self.MARIADB_USER, self.MARIADB_PASSWORD, self.MARIADB_ROOT_PASSWORD
+                self.MARIADB_HOST, self.MARIADB_DATABASE, self.MARIADB_USER, self.MARIADB_PASSWORD
             ]):
                 raise ValueError("MARIADB_HOST, MARIADB_DATABASE, MARIADB_USER and MARIADB_PASSWORD are required.")
-            if len(self.MARIADB_PASSWORD) < 16 or len(self.MARIADB_ROOT_PASSWORD) < 20:
+            if len(self.MARIADB_PASSWORD) < 16:
                 raise ValueError("MariaDB application and root passwords must be strong and unique.")
             if self.METRICS_ENABLED and len(self.METRICS_TOKEN) < 32:
                 raise ValueError("METRICS_TOKEN must contain at least 32 characters when metrics are enabled.")
