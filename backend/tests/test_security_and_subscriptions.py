@@ -29,9 +29,14 @@ def _production_settings(**overrides):
         "PAYMENT_DEMO_MODE": False,
         "MIKROTIK_DEMO_MODE": False,
         "MIKROTIK_PASSWORD": "router-strong-password",
-        "DATABASE_URL": "postgresql+asyncpg://smartnet:secret@db:5432/smartnet",
+        "DATABASE_BACKEND": "mariadb",
+        "MARIADB_HOST": "db",
+        "MARIADB_DATABASE": "smartnet",
+        "MARIADB_USER": "smartnet",
+        "MARIADB_PASSWORD": "mariadb-strong-password-2026",
+        "MARIADB_ROOT_PASSWORD": "mariadb-root-strong-password-2026",
         "PAYMENT_PROVIDER_MODE": "manual",
-        "POSTGRES_PASSWORD": "postgres-strong-password-2026",
+        
         "CORS_ORIGINS": ["https://smartnet.example"],
     }
     values.update(overrides)
@@ -44,11 +49,11 @@ def test_production_settings_accept_realistic_manual_payment_configuration():
     assert settings.PAYMENT_PROVIDER_MODE == "manual"
 
 
-def test_production_settings_reject_default_postgres_password():
+def test_production_settings_reject_default_mariadb_password():
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
-        _production_settings(POSTGRES_PASSWORD="dev-only-postgres-password-change-me")
+        _production_settings(MARIADB_PASSWORD="dev-only-mariadb-password-change-me")
 
 
 @pytest.mark.asyncio
