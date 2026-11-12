@@ -181,8 +181,22 @@ async def post_chat_message(
             )
             result = {"model": "smartnet-card-restricted"}
     else:
-        from services.chat_service import generate_reply
-        result = await generate_reply(username, message, plan=plan)
+        network_question = bool(re.search(
+            r"(?:شبك|راوتر|مايكروتك|هوتسبوت|hotspot|wifi|واي\s*فاي|بطء|بطيء|تقطيع|انقطاع|انترنت|إنترنت|dns|cpu|ذاكرة|اتصال)",
+            message,
+            re.IGNORECASE,
+        ))
+        if network_question:
+            from services.diagnostics_agent import diagnose
+            diagnosis = await diagnose(message)
+            result = {
+                "text": diagnosis["answer"],
+                "model": diagnosis["model"],
+                "meta": {"sources": diagnosis.get("sources", []), "actions_executed": []},
+            }
+        else:
+            from services.chat_service import generate_reply
+            result = await generate_reply(username, message, plan=plan)
         reply_text = result.get('text', 'تم استلام الرسالة')
 
     bot = models.ChatMessage(username=username, sender='bot', message=reply_text)
