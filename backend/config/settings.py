@@ -100,8 +100,16 @@ class Settings(BaseSettings):
                 raise ValueError("Production DATABASE_URL must use MariaDB via mysql+asyncmy.")
             if not self.MARIADB_PASSWORD or len(self.MARIADB_PASSWORD) < 24 or not re.fullmatch(r"[A-Za-z0-9]{24,}", self.MARIADB_PASSWORD):
                 raise ValueError("MARIADB_PASSWORD must be URL-safe alphanumeric and at least 24 characters.")
-            if not self.MARIADB_ROOT_PASSWORD or len(self.MARIADB_ROOT_PASSWORD) < 24:
-                raise ValueError("MARIADB_ROOT_PASSWORD must be at least 24 characters.")
+            if (
+                not self.MARIADB_ROOT_PASSWORD
+                or len(self.MARIADB_ROOT_PASSWORD) < 24
+                or self.MARIADB_ROOT_PASSWORD.startswith("dev-only-")
+            ):
+                raise ValueError("Set a unique MARIADB_ROOT_PASSWORD with at least 24 non-placeholder characters.")
+            if not re.fullmatch(r"[A-Za-z0-9_]+", self.MARIADB_DATABASE):
+                raise ValueError("MARIADB_DATABASE may contain only letters, digits and underscore.")
+            if not re.fullmatch(r"[A-Za-z0-9_]+", self.MARIADB_USER):
+                raise ValueError("MARIADB_USER may contain only letters, digits and underscore.")
             if self.DASHBOARD_USERNAME.strip().lower() in {"admin", "administrator"}:
                 raise ValueError("Set a unique non-default DASHBOARD_USERNAME.")
             if len(self.DASHBOARD_PASSWORD) < 12:
