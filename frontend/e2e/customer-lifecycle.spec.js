@@ -91,6 +91,7 @@ test("customer registration -> manual review -> activation -> portal -> chat -> 
   await expect(page.getByText(/تم تسجيل طلب إعادة التشغيل/)).toBeVisible();
 
   // An administrator reviews the request and the demo router receives the approved action.
+  await adminPage.reload();
   await adminPage.getByRole("button", { name: "موافقات الشبكة" }).click();
   const actionRow = adminPage.getByRole("row").filter({ hasText: username });
   await expect(actionRow).toBeVisible();
