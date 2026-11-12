@@ -19,7 +19,7 @@
 
 - Production must use API-SSL with certificate and hostname validation enabled. Do not fall back to plaintext TCP 8728.
 - Keep the management interface reachable only from a VPN/private management network. Never expose RouterOS API ports to the public internet.
-- Use a dedicated RouterOS account. The monitoring agent must use read-only permissions; operational credentials should be kept separate where the RouterOS policy model permits it.
+- Use separate RouterOS accounts and secrets. `MIKROTIK_MONITOR_*` must be a read-only account used only for status/profile/session reads. `MIKROTIK_OPERATOR_*` is a distinct account for approved writes such as card creation, disconnect and reboot. Never give the monitor account write permissions or share operator credentials with the monitoring agent.
 - No free-text chat, LLM, diagnostics agent or monitoring agent may execute a configuration change.
 - Router changes must use allow-listed actions, request IDs, approval, separate execution, expiry and audit logs. Reboot approval must come from an administrator other than the requester.
 
