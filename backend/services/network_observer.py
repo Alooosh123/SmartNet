@@ -79,7 +79,7 @@ async def collect_network_observation() -> dict:
         detail_parts.append("; ".join(errors))
     detail_parts.append("Collected using read-only RouterOS resource and active-session queries.")
     snapshot = {
-        "observed_at": datetime.now(timezone.utc).isoformat(),
+        "observed_at": datetime.now(timezone.utc),
         "status": health,
         "router_board": (status_data or {}).get("board-name") or (status_data or {}).get("board_name"),
         "router_version": (status_data or {}).get("version"),
