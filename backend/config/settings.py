@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     NETWORK_ALERT_COOLDOWN_SECONDS: int = 900
 
     METRICS_ENABLED: bool = True
+    METRICS_TOKEN: str = ""
     SENTRY_DSN: Optional[str] = None
     OTEL_EXPORTER_OTLP_ENDPOINT: Optional[str] = None
 
@@ -125,6 +126,8 @@ class Settings(BaseSettings):
                 raise ValueError("MARIADB_HOST, MARIADB_DATABASE, MARIADB_USER and MARIADB_PASSWORD are required.")
             if len(self.MARIADB_PASSWORD) < 16 or len(self.MARIADB_ROOT_PASSWORD) < 20:
                 raise ValueError("MariaDB application and root passwords must be strong and unique.")
+            if self.METRICS_ENABLED and len(self.METRICS_TOKEN) < 32:
+                raise ValueError("METRICS_TOKEN must contain at least 32 characters when metrics are enabled.")
             if self.PAYMENT_PROVIDER_MODE != "manual":
                 raise ValueError("Production currently supports operational manual payment only; gateway mode requires a provider-specific verified adapter.")
             if len(self.DASHBOARD_PASSWORD) < 12:
