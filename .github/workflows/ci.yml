@@ -2,7 +2,7 @@ name: SmartNet CI
 
 on:
   push:
-    branches: [main, production-readiness]
+    branches: [main, production-readiness, production-hardening]
   pull_request:
     branches: [main]
 
@@ -34,6 +34,8 @@ jobs:
           cache-dependency-path: backend/requirements-dev.txt
       - name: Install Python dependencies
         run: python -m pip install -r requirements-dev.txt
+      - name: Audit Python dependencies
+        run: pip-audit -r requirements.txt --strict
       - name: Compile backend
         run: python -m compileall -q .
       - name: Run automated tests
@@ -95,5 +97,7 @@ jobs:
           cache-dependency-path: frontend/package.json
       - name: Install frontend dependencies
         run: npm install
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=moderate
       - name: Build frontend
         run: npm run build
