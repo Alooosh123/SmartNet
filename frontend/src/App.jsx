@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity, Wifi, Users, CreditCard, Layers3, LogOut, RefreshCw,
   Router, ShieldCheck, FileDown, Plus, Power, CheckCircle2, XCircle,
-  Menu, X, AlertTriangle, Search, Eye, CalendarClock, MessageCircle, LockKeyhole
+  Menu, X, AlertTriangle, Search, Eye, CalendarClock, MessageCircle, LockKeyhole, ClipboardCheck, Gauge
 } from "lucide-react";
 
 const API = (import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
@@ -32,6 +32,8 @@ const nav = [
   { id: "cards", label: "كروت الهوت سبوت", icon: Layers3 },
   { id: "clients", label: "المشتركون", icon: Users },
   { id: "payments", label: "طلبات الاشتراك", icon: CreditCard },
+  { id: "operations", label: "موافقات العمليات", icon: ClipboardCheck },
+  { id: "monitoring", label: "المراقبة الذكية", icon: Gauge },
 ];
 const clientNav = [
   { id: "overview", label: "حسابي", icon: Activity },
@@ -203,6 +205,10 @@ function App() {
   const [batches, setBatches] = useState([]);
   const [clients, setClients] = useState([]);
   const [registrations, setRegistrations] = useState([]);
+  const [operations, setOperations] = useState([]);
+  const [snapshots, setSnapshots] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [reconciliation, setReconciliation] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [chatQuota, setChatQuota] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
@@ -231,6 +237,10 @@ function App() {
         api("/cards/batches", token),
         api("/auth/clients", token),
         api("/auth/registrations", token),
+        api("/mikrotik/operations", token),
+        api("/mikrotik/monitor/snapshots", token),
+        api("/mikrotik/monitor/alerts", token),
+        api("/auth/payments/reconciliation", token),
       ]);
       if (results[0].status === "fulfilled") setHealth(results[0].value);
       if (results[1].status === "fulfilled") setRouter(results[1].value);
@@ -238,6 +248,10 @@ function App() {
       if (results[3].status === "fulfilled") setBatches(results[3].value);
       if (results[4].status === "fulfilled") setClients(results[4].value);
       if (results[5].status === "fulfilled") setRegistrations(results[5].value);
+      if (results[6].status === "fulfilled") setOperations(results[6].value);
+      if (results[7].status === "fulfilled") setSnapshots(results[7].value);
+      if (results[8].status === "fulfilled") setAlerts(results[8].value);
+      if (results[9].status === "fulfilled") setReconciliation(results[9].value);
       const failed = results.filter(x => x.status === "rejected");
       if (failed.length) setError(failed.map(x => x.reason?.message).join(" — "));
     } else {
@@ -262,7 +276,7 @@ function App() {
       if (results[1].status === "fulfilled") setChatQuota(results[1].value);
       if (results[2].status === "fulfilled") setChatMessages(results[2].value);
       if (results[3].status === "fulfilled") setRouter(results[3].value);
-      setHealth(null); setUsers([]); setBatches([]); setClients([]); setRegistrations([]);
+      setHealth(null); setUsers([]); setBatches([]); setClients([]); setRegistrations([]); setOperations([]); setSnapshots([]); setAlerts([]); setReconciliation(null);
       const failed = results.filter(x => x.status === "rejected");
       if (failed.length) setError(failed.map(x => x.reason?.message).join(" — "));
     }
@@ -284,6 +298,32 @@ function App() {
     try { await fn(); setNotice(success); await loadAll(); }
     catch (err) { setError(err.message); }
   }
+
+  async function reviewOperation(id, decision) {
+    const path = decision === "execute"
+      ? `/mikrotik/operations/${id}/execute`
+      : `/mikrotik/operations/${id}/${decision}`;
+    const options = { method: "POST" };
+    if (decision !== "execute") options.body = JSON.stringify({
+      note: decision === "approve" ? "Reviewed by SmartNet administrator" : "Rejected from SmartNet admin console",
+    });
+    const message = decision === "approve" ? "تم اعتماد الطلب. يلزم تنفيذ منفصل."
+      : decision === "execute" ? "تمت معالجة طلب العملية."
+      : "تم رفض طلب العملية.";
+    await action(() => api(path, token, options), message);
+  }
+
+  const operationLabel = actionName => actionName === "reboot_router" ? "إعادة تشغيل الراوتر"
+    : actionName === "disconnect_user" ? "فصل مستخدم" : actionName;
+  const operationStatus = value => ({
+    pending: "بانتظار المراجعة",
+    approved: "معتمد — بانتظار التنفيذ",
+    executing: "قيد التنفيذ",
+    executed: "تم التنفيذ",
+    rejected: "مرفوض",
+    failed: "فشل التنفيذ",
+    expired: "منتهي",
+  }[value] || value);
 
   async function generateCards(event) {
     event.preventDefault(); setGenerating(true);
@@ -311,7 +351,7 @@ function App() {
 
   async function reboot() {
     if (!window.confirm("هل أنت متأكد من إعادة تشغيل الراوتر؟ ستنقطع الشبكة مؤقتاً.")) return;
-    await action(()=>api("/mikrotik/reboot", token, { method: "POST" }), "تم إرسال أمر إعادة التشغيل.");
+    await action(()=>api("/mikrotik/reboot", token, { method: "POST" }), "تم تسجيل طلب إعادة التشغيل، وهو بانتظار اعتماد مسؤول مخول.");
   }
 
   async function changePassword() {
@@ -444,7 +484,7 @@ function App() {
           <div className="section-intro"><div><h2>الراوتر والمستخدمون</h2><p className="muted">إدارة جلسات Hotspot ومراقبة حالة MikroTik.</p></div><button className="danger-btn" onClick={reboot}><Power size={17}/> إعادة تشغيل الراوتر</button></div>
           <div className="stats-grid compact"><Stat icon={Activity} label="المستخدمون النشطون" value={users.length}/><Stat icon={Router} label="الموديل" value={router?.["board-name"] || router?.board_name || "—"}/><Stat icon={Activity} label="CPU" value={router?.["cpu-load"] ?? router?.cpu_load ?? "—"}/></div>
           <div className="panel"><div className="panel-head"><h3>الجلسات النشطة</h3><button className="icon-btn" onClick={loadAll}><RefreshCw size={17}/></button></div>
-            {users.length ? <div className="table-wrap"><table><thead><tr><th>المستخدم</th><th>IP</th><th>MAC</th><th>مدة الاتصال</th><th>الإجراء</th></tr></thead><tbody>{users.map((u,i)=><tr key={u.id||u.username||i}><td className="mono">{u.user||u.name||u.username||"—"}</td><td className="mono">{u.address||u.ip||"—"}</td><td className="mono">{u["mac-address"]||u.mac||"—"}</td><td>{u.uptime||"—"}</td><td><button className="table-action danger" onClick={()=>action(()=>api(`/mikrotik/users/${encodeURIComponent(u.user||u.name||u.username)}/disconnect`,token,{method:"POST"}),"تم إرسال طلب فصل المستخدم.")}>فصل</button></td></tr>)}</tbody></table></div>:<Empty text="لا توجد جلسات أو تعذر جلب المستخدمين."/>}
+            {users.length ? <div className="table-wrap"><table><thead><tr><th>المستخدم</th><th>IP</th><th>MAC</th><th>مدة الاتصال</th><th>الإجراء</th></tr></thead><tbody>{users.map((u,i)=><tr key={u.id||u.username||i}><td className="mono">{u.user||u.name||u.username||"—"}</td><td className="mono">{u.address||u.ip||"—"}</td><td className="mono">{u["mac-address"]||u.mac||"—"}</td><td>{u.uptime||"—"}</td><td><button className="table-action danger" onClick={()=>action(()=>api(`/mikrotik/users/${encodeURIComponent(u.user||u.name||u.username)}/disconnect`,token,{method:"POST"}),"تم تسجيل طلب فصل المستخدم بانتظار اعتماد المسؤول.")}>فصل</button></td></tr>)}</tbody></table></div>:<Empty text="لا توجد جلسات أو تعذر جلب المستخدمين."/>}
           </div>
         </section>}
         {page==="cards" && <section className="page-section">
@@ -460,14 +500,53 @@ function App() {
         </section>}
         {page==="payments" && <section className="page-section">
           <div className="section-intro"><div><h2>طلبات الاشتراك والدفع</h2><p className="muted">راجع إشعار الدفع أو صورة الحوالة قبل اعتماد حساب العميل.</p></div></div>
-          <div className="alert warning"><AlertTriangle size={18}/> رفع صورة الحوالة لا يؤكد الدفع تلقائياً. تحقق من التحويل في حسابك أو بوابة الدفع قبل الموافقة.</div>
-          <div className="panel"><div className="table-wrap"><table><thead><tr><th>رقم الطلب</th><th>المستخدم</th><th>الباقة</th><th>المبلغ</th><th>الدفع</th><th>الحوالة</th><th>الإجراء</th></tr></thead><tbody>{registrations.map(r=><tr key={r.id}><td>#{r.id}</td><td className="mono">{r.username}</td><td>{r.plan}</td><td>{r.price} USD</td><td><span className={r.paid?"status-pill good":"status-pill warn"}>{r.paid?"مسجل كمدفوع":"بانتظار الدفع"}</span></td><td>{r.receipt_image?<button className="table-action" onClick={()=>downloadReceipt(r.id)}><Eye size={15}/> عرض</button>:"—"}</td><td><div className="row-actions">
-            {!r.processed&&!r.paid&&<button className="table-action" onClick={()=>{if(window.confirm("هل تحققت من وصول المبلغ فعلياً إلى حسابك وبنفس القيمة والعملة؟ سيُسجل قرار التحقق باسمك.")) action(()=>api(`/auth/registrations/${r.id}/verify-manual`,token,{method:"POST"}),"تم تأكيد وصول المبلغ. أصبح الطلب جاهزاً للاعتماد.")}}>تأكيد وصول المبلغ</button>}
+          <div className="alert warning"><AlertTriangle size={18}/> رفع صورة الحوالة لا يؤكد الدفع تلقائياً. راجع الحساب الفعلي، ثم أدخل المبلغ والعملة ومرجع العملية الفريد قبل اعتماد الاشتراك.</div>
+          <div className={reconciliation?.anomaly_count ? "alert error" : "alert success"}>مطابقة الدفع: {reconciliation?.anomaly_count ?? "—"} حالات تحتاج مراجعة من أصل {reconciliation?.checked_registrations ?? "—"} طلباً.
+            <button className="table-action" onClick={async()=>{try{setReconciliation(await api("/auth/payments/reconciliation",token));}catch(err){setError(err.message);}}}>تحديث المطابقة</button>
+          </div>
+          <div className="panel"><div className="table-wrap"><table><thead><tr><th>رقم الطلب</th><th>المستخدم</th><th>الباقة</th><th>المبلغ</th><th>الدفع</th><th>الحوالة</th><th>الإجراء</th></tr></thead><tbody>{registrations.map(r=><tr key={r.id}><td>#{r.id}</td><td className="mono">{r.username}</td><td>{r.plan}</td><td>{r.price} {r.currency || "USD"}</td><td><span className={r.paid?"status-pill good":"status-pill warn"}>{r.paid?"مسجل كمدفوع":"بانتظار الدفع"}</span></td><td>{r.receipt_image?<button className="table-action" onClick={()=>downloadReceipt(r.id)}><Eye size={15}/> عرض</button>:"—"}</td><td><div className="row-actions">
+            {!r.processed&&!r.paid&&<button className="table-action" onClick={()=>{const external_reference=window.prompt("أدخل مرجع الحوالة أو رقم العملية من سجل المحفظة/البنك:");if(!external_reference?.trim())return;if(window.confirm(`تأكيد استلام ${r.price} ${r.currency||"USD"} بالمرجع ${external_reference.trim()}؟`))action(()=>api(`/auth/registrations/${r.id}/verify-manual`,token,{method:"POST",body:JSON.stringify({amount:Number(r.price),currency:r.currency||"USD",external_reference:external_reference.trim()})}),"تم توثيق المبلغ والمرجع. أصبح الطلب جاهزاً لاعتماد الاشتراك.");}}>توثيق الحوالة</button>}
             {!r.processed&&r.paid&&<button className="approve-btn" onClick={()=>{if(window.confirm("تفعيل حساب العميل الآن؟")) action(()=>api(`/auth/registrations/${r.id}/approve`,token,{method:"POST"}),"تم اعتماد الاشتراك.")}}><CheckCircle2 size={15}/> اعتماد الاشتراك</button>}
             {r.processed&&<span className="muted">معتمد</span>}
           </div></td></tr>)}</tbody></table></div>{!registrations.length&&<Empty text="لا توجد طلبات تسجيل حالياً."/>}</div>
         </section>}
-        <footer className="footer"><span>SmartNet v1.1.0</span><span>لوحة إدارة الشبكة</span></footer>
+
+        {page==="operations" && <section className="page-section">
+          <div className="section-intro"><div><h2>موافقات عمليات الشبكة</h2><p className="muted">لا يُنفّذ الفصل أو إعادة التشغيل إلا بعد تسجيل الطلب ومراجعته ثم تنفيذ معتمد.</p></div><button className="secondary" onClick={loadAll}><RefreshCw size={16}/> تحديث</button></div>
+          <div className="panel">
+            {operations.length ? <div className="table-wrap"><table><thead><tr><th>الطلب</th><th>الهدف</th><th>مقدم الطلب</th><th>المراجع</th><th>الحالة</th><th>الإجراء</th></tr></thead><tbody>
+              {operations.map(op=><tr key={op.id}>
+                <td>#{op.id} · {operationLabel(op.action)}</td><td>{op.target || "الراوتر"}</td><td>{op.requested_by}</td><td>{op.reviewed_by || "—"}</td><td>{operationStatus(op.status)}</td>
+                <td><div className="row-actions">
+                  {op.status==="pending" && !(op.action==="reboot_router" && op.requested_by===username) && <button className="table-action" onClick={()=>reviewOperation(op.id,"approve")}>اعتماد</button>}
+                  {op.status==="pending" && <button className="table-action danger" onClick={()=>reviewOperation(op.id,"reject")}>رفض</button>}
+                  {op.status==="pending" && op.action==="reboot_router" && op.requested_by===username && <span className="muted">يتطلب مسؤولاً آخر</span>}
+                  {op.status==="approved" && <button className="approve-btn" onClick={()=>reviewOperation(op.id,"execute")}>تنفيذ</button>}
+                  {op.status==="executed" && <span className="status-pill good">مكتمل</span>}
+                </div></td>
+              </tr>)}
+            </tbody></table></div> : <Empty text="لا توجد طلبات عمليات حالياً."/>}
+          </div>
+        </section>}
+        {page==="monitoring" && <section className="page-section">
+          <div className="section-intro"><div><h2>المراقبة الذكية للشبكة</h2><p className="muted">قراءات دورية للراوتر والجلسات النشطة. الوكيل لا يغيّر إعدادات الشبكة.</p></div><button className="secondary" onClick={loadAll}><RefreshCw size={16}/> تحديث</button></div>
+          <div className="stats-grid compact">
+            <Stat icon={Activity} label="آخر CPU" value={snapshots[0]?.cpu_load == null ? "—" : `${snapshots[0].cpu_load}%`}/>
+            <Stat icon={Users} label="آخر جلسات نشطة" value={snapshots[0]?.active_users ?? "—"}/>
+            <Stat icon={AlertTriangle} label="تنبيهات نشطة" value={alerts.filter(a=>a.active).length}/>
+          </div>
+          <div className="panel"><div className="panel-head"><h3>آخر القياسات</h3><span className="muted">{snapshots.length} قراءة</span></div>
+            {snapshots.length ? <div className="table-wrap"><table><thead><tr><th>الوقت</th><th>CPU</th><th>الذاكرة المتاحة</th><th>المستخدمون</th><th>الإصدار</th></tr></thead><tbody>
+              {snapshots.slice(0,30).map(item=><tr key={item.id}><td>{item.created_at?new Date(item.created_at).toLocaleString("ar"):"—"}</td><td>{item.cpu_load==null?"—":`${item.cpu_load}%`}</td><td>{item.free_memory??"—"}</td><td>{item.active_users}</td><td>{item.router_version||"—"}</td></tr>)}
+            </tbody></table></div> : <Empty text="لا توجد قراءات بعد. فعّل NETWORK_MONITOR_ENABLED بعد نجاح اختبار الراوتر الحقيقي."/>}
+          </div>
+          <div className="panel"><div className="panel-head"><h3>التنبيهات</h3></div>
+            {alerts.length ? <div className="table-wrap"><table><thead><tr><th>الوقت</th><th>الرمز</th><th>الخطورة</th><th>التفاصيل</th><th>الحالة</th></tr></thead><tbody>
+              {alerts.map(item=><tr key={item.id}><td>{item.created_at?new Date(item.created_at).toLocaleString("ar"):"—"}</td><td>{item.code}</td><td>{item.severity}</td><td>{item.message}</td><td>{item.active?"نشط":"تم الحل"}</td></tr>)}
+            </tbody></table></div> : <Empty text="لا توجد تنبيهات مسجلة."/>}
+          </div>
+        </section>}
+        <footer className="footer"><span>SmartNet v1.2.0</span><span>لوحة إدارة الشبكة</span></footer>
       </div>
     </main>
   </div>;
