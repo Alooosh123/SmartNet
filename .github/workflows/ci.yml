@@ -142,7 +142,9 @@ jobs:
           CREATE USER 'smartnet_migrator'@'%' IDENTIFIED BY 'ci-migration-password';
           GRANT ALL PRIVILEGES ON smartnet_ci.* TO 'smartnet_migrator'@'%';
           CREATE USER 'smartnet_backup'@'%' IDENTIFIED BY 'ci-backup-password';
-          GRANT SELECT, SHOW VIEW, TRIGGER, LOCK TABLES, CREATE, ALTER, INSERT, UPDATE, DELETE, DROP ON smartnet_ci.* TO 'smartnet_backup'@'%';
+          GRANT SELECT, SHOW VIEW, TRIGGER, LOCK TABLES ON smartnet_ci.* TO 'smartnet_backup'@'%';
+          CREATE USER 'smartnet_restore'@'%' IDENTIFIED BY 'ci-restore-password';
+          GRANT ALL PRIVILEGES ON smartnet_ci.* TO 'smartnet_restore'@'%';
           FLUSH PRIVILEGES;
           SQL
       - name: Apply Alembic migrations against MariaDB 11.8
@@ -169,4 +171,6 @@ jobs:
           MARIADB_DATABASE: smartnet_ci
           MARIADB_USER: smartnet_backup
           MARIADB_PASSWORD: ci-backup-password
+          MARIADB_RESTORE_USER: smartnet_restore
+          MARIADB_RESTORE_PASSWORD: ci-restore-password
         run: bash deploy/scripts/test-mariadb-backup-restore.sh
