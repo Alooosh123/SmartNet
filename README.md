@@ -10,7 +10,7 @@
 - **Frontend:** React 18 وVite 8 بواجهة عربية RTL.
 - **Database:** MariaDB 11.4 LTS في الإنتاج؛ SQLite للتطوير والاختبارات المحلية فقط.
 - **Runtime:** Podman وPodman Compose باستخدام ملفات Containerfile.
-- **HTTPS:** Caddy (اختياري عبر profile باسم edge).
+- **HTTPS:** Caddy كخدمة اختيارية تُشغّل بالاسم مباشرةً عبر Podman Compose.
 - **Router:** MikroTik RouterOS عبر API-SSL مع التحقق من الشهادة وحساب مراقبة للقراءة فقط وحساب تشغيل منفصل للكتابة.
 - **AI:** مساعد OpenAI اختياري، وكيل تشخيص يعتمد ملفات Knowledge Base داخل المستودع.
 - **Monitoring:** عامل مراقبة للقراءة فقط، وسجل snapshots وتنبيهات وPrometheus metrics.
@@ -83,6 +83,11 @@ SmartNet لا يعتمد Docker أو PostgreSQL. قاعدة البيانات ا�
 2. انسخ `.env.example` إلى `.env` في جذر المشروع.
 3. غيّر جميع كلمات المرور والأسرار، واجعل `DATABASE_BACKEND=mariadb`، وأدخل قيم MariaDB، ومعلومات HTTPS والراوتر الحقيقية.
 4. لا تستخدم بيانات المثال أو إعدادات demo في الإنتاج.
+5. نفّذ فحص الإعدادات والأسرار قبل التشغيل:
+
+```bash
+bash scripts/check-production-env.sh
+```
 
 تشغيل قاعدة البيانات والواجهة الخلفية والواجهة على شبكة Podman:
 
@@ -95,7 +100,7 @@ podman-compose -f podman-compose.yml up -d --build mariadb backend frontend
 لتفعيل HTTPS عبر Caddy بعد توجيه DNS للنطاق إلى الخادم وضبط `DOMAIN` و`ACME_EMAIL`:
 
 ```bash
-podman-compose -f podman-compose.yml up -d --build caddy
+podman-compose -f podman-compose.yml up -d caddy
 ```
 
 لبوت Telegram (اختياري):
@@ -131,7 +136,7 @@ podman-compose -f podman-compose.yml up -d prometheus
 ## وكلاء الذكاء الاصطناعي
 
 - **Network Monitor:** يقرأ حالة الراوتر وعدد الجلسات والأداء، ويحفظ snapshots والتنبيهات. لا يمتلك وظائف تعديل RouterOS.
-- **Diagnostics Agent:** يسترجع إرشادات من `backend/knowledge_base` ثم يجيب بمصادرها. لا ينفذ أوامر.
+- **Diagnostics Agent:** يسترجع إرشادات من `backend/knowledge_base` ويضم إليها قياسات RouterOS الحية المجمّعة عبر حساب المراقبة فقط. لا ينفذ أوامر ولا يرسل بيانات تعريف المشتركين للنموذج.
 - **Customer Assistant:** يجيب عن الاشتراك والدعم، وتُحال أسئلة أعطال الشبكة إلى قاعدة المعرفة.
 - **Network Operations Approval:** طلب فصل مستخدم أو إعادة تشغيل الراوتر يُسجّل ويُراجع ويُنفّذ كخطوات منفصلة مع سجل تدقيق.
 
