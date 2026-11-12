@@ -3,7 +3,7 @@
   <name>SmartNet Backend</name>
   <description>SmartNet FastAPI backend service</description>
   <executable>%BASE%\..\..\backend\.venv\Scripts\python.exe</executable>
-  <arguments>-m uvicorn app:app --host 127.0.0.1 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips=127.0.0.1</arguments>
+  <arguments>-m uvicorn app:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1</arguments>
   <workingdirectory>%BASE%\..\..\backend</workingdirectory>
   <startmode>Automatic</startmode>
   <onfailure action="restart" delay="5 sec"/>
