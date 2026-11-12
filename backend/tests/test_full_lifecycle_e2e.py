@@ -52,6 +52,7 @@ def smartnet_e2e(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "PAYMENT_DEMO_MODE", False)
     monkeypatch.setattr(settings, "MIKROTIK_DEMO_MODE", True)
     monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
+    monkeypatch.setattr(settings, "NETWORK_OBSERVER_ENABLED", False)
     app.dependency_overrides[get_db] = override_get_db
 
     with TestClient(app) as client:
@@ -103,6 +104,12 @@ def _approve_manually(client, admin_headers, registration):
     response = client.post(
         f"/auth/registrations/{registration['registration_id']}/verify-manual",
         headers=admin_headers,
+        json={
+            "payment_reference": f"bankref-e2e-{registration['registration_id']}",
+            "amount": str(registration["price"]),
+            "currency": "USD",
+            "note": "Verified against isolated bank statement fixture",
+        },
     )
     assert response.status_code == 200, response.text
     assert response.json()["paid"] is True
@@ -182,6 +189,23 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
     assert profile.json()["can_manage_cards"] is True
     assert profile.json()["can_reboot_network"] is True
 
+    # Annual subscribers may request a reboot, but only an administrator can approve it.
+    reboot_request = client.post("/mikrotik/reboot", headers=customer_headers)
+    assert reboot_request.status_code == 200, reboot_request.text
+    assert reboot_request.json()["status"] == "pending"
+    pending_actions = client.get("/mikrotik/action-requests", headers=admin_headers)
+    assert pending_actions.status_code == 200
+    action_item = next(item for item in pending_actions.json() if item["id"] == reboot_request.json()["request_id"])
+    assert action_item["requested_by"] == "e2e-annual-customer"
+    assert action_item["status"] == "pending"
+    approved_action = client.post(
+        f"/mikrotik/action-requests/{action_item['id']}/approve",
+        headers=admin_headers,
+    )
+    assert approved_action.status_code == 200, approved_action.text
+    assert approved_action.json()["request"]["status"] == "executed"
+    assert client.get("/mikrotik/users", headers=customer_headers).status_code == 403
+
     # Customer can use the support chat; no live network facts are fabricated.
     chat = client.post(
         "/client/chat",
@@ -256,3 +280,5 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
     monthly_token = _login(client, "e2e-monthly-customer", "E2E-monthly-password-2026!")
     monthly_headers = {"Authorization": f"Bearer {monthly_token}"}
     assert client.get("/cards/batches", headers=monthly_headers).status_code == 403
+    assert client.post("/mikrotik/reboot", headers=monthly_headers).status_code == 403
+    assert client.get("/mikrotik/users", headers=monthly_headers).status_code == 403
