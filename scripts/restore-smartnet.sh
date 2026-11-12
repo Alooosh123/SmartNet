@@ -23,8 +23,8 @@ tar -tzf "$UPLOADS_ARCHIVE" >/dev/null
 podman inspect smartnet-mariadb >/dev/null
 podman inspect smartnet-backend >/dev/null
 if [[ -z "${RESTORE_UPLOADS_DIR:-}" && "${RESTORE_UPLOADS_CONFIRM:-}" != "YES" ]]; then
-  echo "Refusing to overwrite live uploads. Set RESTORE_UPLOADS_DIR for an isolated restore, or RESTORE_UPLOADS_CONFIRM=YES for an intentional in-place restore." >&2
-  exit 2
+  RESTORE_UPLOADS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/smartnet-uploads-restore.XXXXXX")"
+  echo "No uploads destination supplied. Extracting into isolated temporary directory: $RESTORE_UPLOADS_DIR" >&2
 fi
 
 echo "Restoring MariaDB database '$RESTORE_DATABASE'."
