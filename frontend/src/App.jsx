@@ -579,6 +579,27 @@ function App() {
         {page==="payments" && <section className="page-section">
           <div className="section-intro"><div><h2>طلبات الاشتراك والدفع</h2><p className="muted">راجع إشعار الدفع أو صورة الحوالة قبل اعتماد حساب العميل.</p></div></div>
           <div className="alert warning"><AlertTriangle size={18}/> رفع صورة الحوالة لا يؤكد الدفع تلقائياً. تحقق من التحويل في حسابك أو بوابة الدفع قبل الموافقة.</div>
+          <div className="panel">
+            <div className="panel-head"><h3>مطابقة الحوالات وكشوف الحساب</h3><span className="muted">الإجمالي الموثق: {paymentReconciliation?.verified_total||"0.00"} USD</span></div>
+            <p className="muted">ارفع كشف CSV موحداً يحتوي الأعمدة reference,amount,currency,status. المطابقة للعرض فقط ولا تؤكد دفعاً أو تفعّل اشتراكاً.</p>
+            <label>ملف كشف الحساب CSV<input type="file" accept=".csv,text/csv" onChange={uploadReconciliationStatement} disabled={statementUploading}/></label>
+            {statementUploading && <p className="muted">جارٍ مطابقة الكشف...</p>}
+            {paymentReconciliation && <div className="stats-grid compact">
+              <Stat icon={CheckCircle2} label="مدفوعات موثقة" value={paymentReconciliation.verified_count}/>
+              <Stat icon={CalendarClock} label="مدفوعة بانتظار التفعيل" value={paymentReconciliation.paid_pending_activation?.length||0}/>
+              <Stat icon={AlertTriangle} label="إيصالات تحتاج مراجعة" value={paymentReconciliation.receipts_waiting_finance_review?.length||0}/>
+              <Stat icon={CreditCard} label="مراجع مكررة" value={paymentReconciliation.duplicate_references?.length||0}/>
+            </div>}
+            {statementResult && <div className="registration-info">
+              <b>نتيجة المطابقة الأخيرة</b>
+              <span>متطابقة: {statementResult.matched?.length||0}</span>
+              <span>اختلافات: {statementResult.mismatches?.length||0}</span>
+              <span>موجودة في الكشف فقط: {statementResult.external_only?.length||0}</span>
+              <span>موجودة في النظام فقط: {statementResult.internal_only?.length||0}</span>
+              <span>صفوف غير صالحة: {statementResult.invalid_rows?.length||0}</span>
+              <small className="muted">SHA256: {statementResult.statement_sha256}</small>
+            </div>}
+          </div>
           <div className="panel"><div className="table-wrap"><table><thead><tr><th>رقم الطلب</th><th>المستخدم</th><th>الباقة</th><th>المبلغ</th><th>الدفع</th><th>الحوالة</th><th>الإجراء</th></tr></thead><tbody>{registrations.map(r=><tr key={r.id}><td>#{r.id}</td><td className="mono">{r.username}</td><td>{r.plan}</td><td>{r.price} USD</td><td><span className={r.paid?"status-pill good":"status-pill warn"}>{r.paid?"مسجل كمدفوع":"بانتظار الدفع"}</span></td><td>{r.receipt_image?<button className="table-action" onClick={()=>downloadReceipt(r.id)}><Eye size={15}/> عرض</button>:"—"}</td><td><div className="row-actions">
             {!r.processed&&!r.paid&&<button className="table-action" onClick={()=>verifyManualPayment(r)}>تأكيد وصول المبلغ</button>}
             {!r.processed&&r.paid&&<button className="approve-btn" onClick={()=>{if(window.confirm("تفعيل حساب العميل الآن؟")) action(()=>api(`/auth/registrations/${r.id}/approve`,token,{method:"POST"}),"تم اعتماد الاشتراك.")}}><CheckCircle2 size={15}/> اعتماد الاشتراك</button>}
