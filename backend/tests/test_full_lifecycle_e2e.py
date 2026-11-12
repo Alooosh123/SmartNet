@@ -262,3 +262,53 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
     monthly_token = _login(client, "e2e-monthly-customer", "E2E-monthly-password-2026!")
     monthly_headers = {"Authorization": f"Bearer {monthly_token}"}
     assert client.get("/cards/batches", headers=monthly_headers).status_code == 403
+
+    # Network commands require an approval record; a client cannot approve it.
+    requested = client.post("/mikrotik/reboot", headers=customer_headers)
+    assert requested.status_code == 200, requested.text
+    assert requested.json()["status"] == "pending_approval"
+    request_id = requested.json()["request_id"]
+    assert client.post(
+        f"/mikrotik/action-requests/{request_id}/approve",
+        headers=customer_headers,
+        json={"note": "forbidden client approval"},
+    ).status_code == 403
+    assert client.get("/mikrotik/action-requests", headers=customer_headers).status_code == 403
+
+    approved = client.post(
+        f"/mikrotik/action-requests/{request_id}/approve",
+        headers=admin_headers,
+        json={"note": "approved in isolated demo acceptance"},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "executed"
+    assert approved.json()["approved_by"] == "e2e-admin"
+
+    # An administrator cannot approve their own administrative request.
+    own_request = client.post(
+        "/mikrotik/action-requests",
+        headers=admin_headers,
+        json={"action_type": "reboot", "reason": "self approval regression test"},
+    )
+    assert own_request.status_code == 200, own_request.text
+    own_id = own_request.json()["id"]
+    assert client.post(
+        f"/mikrotik/action-requests/{own_id}/approve",
+        headers=admin_headers,
+        json={"note": "must be rejected"},
+    ).status_code == 403
+
+    # Monitoring and diagnosis expose evidence but never invoke a router write.
+    metric = client.post("/agents/network/collect", headers=admin_headers)
+    assert metric.status_code == 200, metric.text
+    assert metric.json()["status"] in {"healthy", "warning", "degraded"}
+    diagnostic = client.post("/agents/diagnostics/run", headers=admin_headers)
+    assert diagnostic.status_code == 200, diagnostic.text
+    assert diagnostic.json()["actions_executed"] == []
+    assert client.post("/agents/network/collect", headers=customer_headers).status_code == 403
+
+    reconciliation = client.get("/auth/payments/reconciliation", headers=admin_headers)
+    assert reconciliation.status_code == 200
+    assert any(item["username"] == "e2e-annual-customer" for item in reconciliation.json()["items"])
+    assert client.get("/auth/payments/reconciliation", headers=customer_headers).status_code == 403
+
