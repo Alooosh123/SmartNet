@@ -216,6 +216,8 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
     assert approved_action.status_code == 200, approved_action.text
     assert approved_action.json()["request"]["status"] == "executed"
     assert client.get("/mikrotik/users", headers=customer_headers).status_code == 403
+    assert client.get("/mikrotik/action-requests", headers=customer_headers).status_code == 403
+    assert client.get("/mikrotik/observations", headers=customer_headers).status_code == 403
 
     # Customer can use the support chat; no live network facts are fabricated.
     chat = client.post(
@@ -271,6 +273,17 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
         "E2E-second-password-2026!",
         "semi_annual",
     )
+    duplicate_reference = client.post(
+        f"/auth/registrations/{second['registration_id']}/verify-manual",
+        headers=admin_headers,
+        json={
+            "payment_reference": "bankref-shared-unique",
+            "amount": str(second["price"]),
+            "currency": "USD",
+            "note": "This reference is already used",
+        },
+    )
+    assert duplicate_reference.status_code == 409
     _approve_manually(client, admin_headers, second)
     second_token = _login(client, "e2e-semi-customer", "E2E-second-password-2026!")
     second_headers = {"Authorization": f"Bearer {second_token}"}
