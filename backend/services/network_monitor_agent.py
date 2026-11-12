@@ -28,12 +28,16 @@ async def _raise_alert(session, code: str, severity: str, message: str) -> None:
     now = datetime.now(timezone.utc)
     recent = await session.execute(
         select(models.NetworkAlert)
-        .where(models.NetworkAlert.code == code, models.NetworkAlert.active.is_(True))
+        .where(models.NetworkAlert.code == code)
         .order_by(models.NetworkAlert.id.desc())
         .limit(1)
     )
     alert = recent.scalars().first()
     if alert is not None:
+        # Keep one active row per alert type. After resolution, suppress a brief
+        # re-trigger inside the cooldown window to avoid noisy flapping.
+        if alert.active:
+            return
         created = alert.created_at
         if created and created.tzinfo is None:
             created = created.replace(tzinfo=timezone.utc)
