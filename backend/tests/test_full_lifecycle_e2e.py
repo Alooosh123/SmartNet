@@ -130,6 +130,18 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
     assert client.get("/auth/registrations", headers=admin_headers).status_code == 200
 
+    # Only administrators may request the diagnostic agent; its evidence is
+    # grounded in the curated knowledge base and labels demo telemetry honestly.
+    diagnostic = client.post(
+        "/mikrotik/diagnose",
+        headers=admin_headers,
+        json={"question": "RouterOS API SSL certificate connection"},
+    )
+    assert diagnostic.status_code == 200, diagnostic.text
+    assert diagnostic.json()["sources"]
+    assert diagnostic.json()["observations"]["mode"] == "demo"
+    assert diagnostic.json()["actions_executed"] == []
+
     # Metrics are machine-authenticated independently from the admin JWT.
     assert client.get("/api/metrics").status_code == 401
     assert client.get("/api/metrics", headers={"Authorization": "Bearer wrong"}).status_code == 401
@@ -202,6 +214,12 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
     # Customer signs in and sees the real approved subscription and permissions.
     customer_token = _login(client, "e2e-annual-customer", "E2E-customer-password-2026!")
     customer_headers = {"Authorization": f"Bearer {customer_token}"}
+    forbidden_diagnostic = client.post(
+        "/mikrotik/diagnose",
+        headers=customer_headers,
+        json={"question": "RouterOS API SSL certificate connection"},
+    )
+    assert forbidden_diagnostic.status_code == 403
     profile = client.get("/auth/me", headers=customer_headers)
     assert profile.status_code == 200
     assert profile.json()["plan"] == "annual"
