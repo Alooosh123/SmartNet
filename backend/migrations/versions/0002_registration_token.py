@@ -17,7 +17,7 @@ def upgrade() -> None:
     if "registration_requests" in inspector.get_table_names():
         columns = {c["name"] for c in inspector.get_columns("registration_requests")}
         if "registration_token_hash" not in columns:
-            op.add_column("registration_requests", sa.Column("registration_token_hash", sa.String(), nullable=True))
+            op.add_column("registration_requests", sa.Column("registration_token_hash", sa.String(length=64), nullable=True))
 
 
 def downgrade() -> None:
