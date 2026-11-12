@@ -119,10 +119,8 @@ class Settings(BaseSettings):
                 raise ValueError("MARIADB_HOST, MARIADB_DATABASE, MARIADB_USER and MARIADB_PASSWORD are required.")
             if len(self.MARIADB_PASSWORD) < 16 or len(self.MARIADB_ROOT_PASSWORD) < 20:
                 raise ValueError("MariaDB application and root passwords must be strong and unique.")
-            if self.PAYMENT_PROVIDER_MODE not in {"manual", "gateway"}:
-                raise ValueError("PAYMENT_PROVIDER_MODE must be manual or gateway.")
-            if self.PAYMENT_PROVIDER_MODE == "gateway" and not self.PAYMENT_CHECKOUT_URL:
-                raise ValueError("PAYMENT_CHECKOUT_URL is required when PAYMENT_PROVIDER_MODE=gateway.")
+            if self.PAYMENT_PROVIDER_MODE != "manual":
+                raise ValueError("Production currently supports operational manual payment only; gateway mode requires a provider-specific verified adapter.")
             if len(self.DASHBOARD_PASSWORD) < 12:
                 raise ValueError("DASHBOARD_PASSWORD must contain at least 12 characters.")
             if self.DASHBOARD_USERNAME.strip().lower() in {"admin", "administrator"}:
