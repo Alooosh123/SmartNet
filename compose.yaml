@@ -1,0 +1,125 @@
+services:
+  db:
+    image: mariadb:12.3.3
+    restart: unless-stopped
+    command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci","--transaction-isolation=READ-COMMITTED","--innodb-flush-log-at-trx-commit=1"]
+    environment:
+      MARIADB_DATABASE: ${MARIADB_DATABASE:?Set MARIADB_DATABASE in .env}
+      MARIADB_USER: ${MARIADB_USER:?Set MARIADB_USER in .env}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:?Set MARIADB_PASSWORD in .env}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in .env}
+    volumes:
+      - ./data/mariadb:/var/lib/mysql:Z
+    healthcheck:
+      test: ["CMD","healthcheck.sh","--connect","--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    networks: [smartnet]
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Containerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: mysql+asyncmy://${MARIADB_USER}:${MARIADB_PASSWORD}@db:3306/${MARIADB_DATABASE}?charset=utf8mb4
+      PAYMENT_PROVIDER_MODE: manual
+      PAYMENT_DEMO_MODE: "false"
+      MIKROTIK_DEMO_MODE: "false"
+      MIKROTIK_USE_SSL: "true"
+      MIKROTIK_PORT: "8729"
+      NETWORK_MONITOR_ENABLED: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./data/uploads:/app/backend/uploads:Z
+      - ./data/static:/app/backend/static:Z
+    expose: ["8000"]
+    healthcheck:
+      test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 5
+      start_period: 60s
+    networks: [smartnet]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Containerfile
+      args:
+        VITE_API_BASE_URL: ""
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${SMARTNET_HTTP_PORT:-8080}:80"
+    networks: [smartnet]
+
+  bot:
+    build:
+      context: .
+      dockerfile: backend/Containerfile
+    profiles: ["telegram"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: mysql+asyncmy://${MARIADB_USER}:${MARIADB_PASSWORD}@db:3306/${MARIADB_DATABASE}?charset=utf8mb4
+      PAYMENT_PROVIDER_MODE: manual
+      PAYMENT_DEMO_MODE: "false"
+      MIKROTIK_DEMO_MODE: "false"
+      MIKROTIK_USE_SSL: "true"
+      MIKROTIK_PORT: "8729"
+      BOT_API_BASE_URL: http://backend:8000
+    command: ["python","-m","bot.main_bot"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [smartnet]
+
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    profiles: ["observability"]
+    restart: unless-stopped
+    command: ["--config.file=/etc/prometheus/prometheus.yml","--storage.tsdb.path=/prometheus","--storage.tsdb.retention.time=30d"]
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro,Z
+      - smartnet-prometheus:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [smartnet]
+
+  grafana:
+    image: grafana/grafana:13.3.1
+    profiles: ["observability"]
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:3001
+    volumes:
+      - smartnet-grafana:/var/lib/grafana
+      - ./deploy/grafana/datasources/prometheus.yml:/etc/grafana/provisioning/datasources/prometheus.yml:ro,Z
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on: [prometheus]
+    networks: [smartnet]
+
+networks:
+  smartnet:
+    driver: bridge
+
+volumes:
+  smartnet-prometheus:
+  smartnet-grafana:
