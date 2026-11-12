@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     MIKROTIK_USERNAME: str = "admin"
     MIKROTIK_PASSWORD: str = ""
     MIKROTIK_PORT: int = 8728
+    MIKROTIK_READONLY_HOST: Optional[str] = None
+    MIKROTIK_READONLY_USERNAME: Optional[str] = None
+    MIKROTIK_READONLY_PASSWORD: Optional[str] = None
+    MIKROTIK_READONLY_PORT: int = 8728
     MIKROTIK_DEMO_MODE: bool = True
     SSID: str = "SmartNet-WiFi"
 
@@ -88,6 +92,13 @@ class Settings(BaseSettings):
                 raise ValueError("MIKROTIK_DEMO_MODE must be false in production.")
             if not self.MIKROTIK_PASSWORD:
                 raise ValueError("MIKROTIK_PASSWORD is required in production.")
+            if self.NETWORK_OBSERVER_ENABLED:
+                if not self.MIKROTIK_READONLY_USERNAME or not self.MIKROTIK_READONLY_PASSWORD:
+                    raise ValueError("Read-only MikroTik API credentials are required when the Network Observer is enabled.")
+                if self.MIKROTIK_READONLY_USERNAME == self.MIKROTIK_USERNAME:
+                    raise ValueError("Use a separate read-only MikroTik account for network monitoring.")
+                if not 1 <= self.MIKROTIK_READONLY_PORT <= 65535:
+                    raise ValueError("MIKROTIK_READONLY_PORT must be a valid TCP port.")
             if not self.DATABASE_URL.startswith("mysql+asyncmy://"):
                 raise ValueError("Production must use MariaDB via mysql+asyncmy://.")
             database_url = make_url(self.DATABASE_URL)
