@@ -1,23 +1,39 @@
 from contextlib import asynccontextmanager
+from time import perf_counter
 from pathlib import Path
 import asyncio
 import logging
 import shutil
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.future import select
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 from config.settings import settings
 from database.database import engine, Base, AsyncSessionLocal
 from database import models
 from services.auth_service import auth_service
 from services.subscription_agent import subscription_agent_loop
+from services.network_monitor_agent import network_monitor_loop
+from api.dependencies import get_current_admin
 from api.routes import auth, mikrotik, cards, client
 
 logger = logging.getLogger(__name__)
+
+if settings.SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        sentry_sdk.init(dsn=settings.SENTRY_DSN, integrations=[FastApiIntegration()], traces_sample_rate=0.1, send_default_pii=False)
+    except Exception:
+        logger.exception("Sentry SDK initialisation failed.")
+
+REQUEST_COUNT = Counter("smartnet_http_requests_total", "Total SmartNet HTTP requests", ["method", "route", "status"])
+REQUEST_LATENCY = Histogram("smartnet_http_request_duration_seconds", "SmartNet HTTP request duration", ["method", "route"])
 
 
 async def run_sqlite_migrations(conn) -> None:
@@ -34,6 +50,7 @@ async def run_sqlite_migrations(conn) -> None:
             "price": "INTEGER DEFAULT 20",
             "receipt_image": "VARCHAR",
             "registration_token_hash": "VARCHAR",
+            "currency": "VARCHAR(3) DEFAULT 'USD'",
         },
         "clients": {
             "plan": "VARCHAR DEFAULT 'monthly'",
@@ -124,14 +141,29 @@ async def lifespan(app: FastAPI):
 
     stop_event = asyncio.Event()
     agent_task = asyncio.create_task(subscription_agent_loop(stop_event))
+    monitor_task = None
+    if settings.NETWORK_MONITOR_ENABLED:
+        monitor_task = asyncio.create_task(network_monitor_loop(stop_event))
     try:
         yield
     finally:
         stop_event.set()
         await agent_task
+        if monitor_task:
+            await monitor_task
 
 
-app = FastAPI(title="SmartNet API", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="SmartNet API", version="1.2.0", lifespan=lifespan)
+
+@app.middleware("http")
+async def collect_http_metrics(request, call_next):
+    started = perf_counter()
+    response = await call_next(request)
+    route = getattr(request.scope.get("route"), "path", "unmatched")
+    elapsed = perf_counter() - started
+    REQUEST_COUNT.labels(request.method, route, str(response.status_code)).inc()
+    REQUEST_LATENCY.labels(request.method, route).observe(elapsed)
+    return response
 
 is_development = settings.ENVIRONMENT.lower() != "production"
 app.add_middleware(
@@ -167,7 +199,7 @@ def read_root():
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "app": "SmartNet", "version": "1.1.0"}
+    return {"status": "ok", "app": "SmartNet", "version": "1.2.0"}
 
 
 @app.get("/api/health/ready")
@@ -180,4 +212,15 @@ async def readiness_check():
         "environment": settings.ENVIRONMENT,
         "mikrotik_demo_mode": settings.MIKROTIK_DEMO_MODE,
         "payment_demo_mode": settings.PAYMENT_DEMO_MODE,
+        "database_backend": settings.DATABASE_BACKEND,
+        "network_monitor_enabled": settings.NETWORK_MONITOR_ENABLED,
+        "mikrotik_tls": settings.MIKROTIK_USE_SSL and settings.MIKROTIK_SSL_VERIFY,
     }
+
+
+@app.get("/api/metrics")
+async def metrics_endpoint(current_admin=Depends(get_current_admin)):
+    if not settings.METRICS_ENABLED:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Metrics endpoint is disabled.")
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
