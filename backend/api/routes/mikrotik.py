@@ -242,8 +242,8 @@ async def execute_network_operation(
     if row.status != "approved":
         raise HTTPException(status_code=409, detail="يجب اعتماد الطلب قبل التنفيذ.")
     actor = getattr(current_admin, "username", "admin")
-    if row.requested_by == actor:
-        raise HTTPException(status_code=403, detail="لا يستطيع مقدم الطلب تنفيذ طلبه بنفسه.")
+    if row.requested_by == actor and row.action == "reboot_router":
+        raise HTTPException(status_code=403, detail="لا يستطيع مقدم الطلب تنفيذ طلب إعادة تشغيل الراوتر بنفسه.")
     if row.expires_at:
         expires = row.expires_at
         if expires.tzinfo is None:
