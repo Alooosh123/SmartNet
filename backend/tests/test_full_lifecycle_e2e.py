@@ -100,12 +100,12 @@ def _register(client, username, password, plan):
     return payload
 
 
-def _approve_manually(client, admin_headers, registration):
+def _approve_manually(client, admin_headers, registration, payment_reference=None):
     response = client.post(
         f"/auth/registrations/{registration['registration_id']}/verify-manual",
         headers=admin_headers,
         json={
-            "payment_reference": f"bankref-e2e-{registration['registration_id']}",
+            "payment_reference": payment_reference or f"bankref-e2e-{registration['registration_id']}",
             "amount": str(registration["price"]),
             "currency": "USD",
             "note": "Verified against isolated bank statement fixture",
