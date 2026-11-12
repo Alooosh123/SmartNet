@@ -22,9 +22,22 @@ gzip -t "$DB_ARCHIVE"
 tar -tzf "$UPLOADS_ARCHIVE" >/dev/null
 podman inspect smartnet-mariadb >/dev/null
 podman inspect smartnet-backend >/dev/null
-echo "Restoring MariaDB database '$RESTORE_DATABASE' and private uploads."
-echo "This overwrites current data. Stop application traffic before proceeding."
+if [[ -z "${RESTORE_UPLOADS_DIR:-}" && "${RESTORE_UPLOADS_CONFIRM:-}" != "YES" ]]; then
+  echo "Refusing to overwrite live uploads. Set RESTORE_UPLOADS_DIR for an isolated restore, or RESTORE_UPLOADS_CONFIRM=YES for an intentional in-place restore." >&2
+  exit 2
+fi
+
+echo "Restoring MariaDB database '$RESTORE_DATABASE'."
+echo "Database restore overwrites the selected database. Stop application traffic before proceeding."
 gunzip -c "$DB_ARCHIVE" | podman exec -i -e "MYSQL_PWD=$MARIADB_PASSWORD" smartnet-mariadb \
   mariadb -u"$MARIADB_USER" "$RESTORE_DATABASE"
-podman exec -i smartnet-backend tar -xzf - -C /app/backend < "$UPLOADS_ARCHIVE"
+
+if [[ -n "${RESTORE_UPLOADS_DIR:-}" ]]; then
+  mkdir -p "$RESTORE_UPLOADS_DIR"
+  tar -xzf "$UPLOADS_ARCHIVE" -C "$RESTORE_UPLOADS_DIR"
+  echo "Uploads restored to isolated directory: $RESTORE_UPLOADS_DIR"
+else
+  echo "Replacing uploads in the running application volume."
+  podman exec -i smartnet-backend tar -xzf - -C /app/backend < "$UPLOADS_ARCHIVE"
+fi
 echo "Restore completed. Run the post-restore validation checklist in docs/PRODUCTION_RUNBOOK.md."
