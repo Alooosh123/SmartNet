@@ -52,6 +52,8 @@ def smartnet_e2e(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "PAYMENT_DEMO_MODE", False)
     monkeypatch.setattr(settings, "MIKROTIK_DEMO_MODE", True)
     monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
+    monkeypatch.setattr(settings, "METRICS_ENABLED", True)
+    monkeypatch.setattr(settings, "METRICS_TOKEN", "SmartNet-test-metrics-token-2026-secure-32-chars")
     app.dependency_overrides[get_db] = override_get_db
 
     with TestClient(app) as client:
@@ -127,6 +129,16 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
     admin_token = _login(client, "e2e-admin", "E2E-admin-password-2026!")
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
     assert client.get("/auth/registrations", headers=admin_headers).status_code == 200
+
+    # Metrics are machine-authenticated independently from the admin JWT.
+    assert client.get("/api/metrics").status_code == 401
+    assert client.get("/api/metrics", headers={"Authorization": "Bearer wrong"}).status_code == 401
+    metric_response = client.get(
+        "/api/metrics",
+        headers={"Authorization": "Bearer SmartNet-test-metrics-token-2026-secure-32-chars"},
+    )
+    assert metric_response.status_code == 200
+    assert b"smartnet_http_requests_total" in metric_response.content
 
     # Customer creates an annual subscription request and uploads a real PNG receipt.
     registration = _register(
