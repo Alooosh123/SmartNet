@@ -41,7 +41,14 @@ test("customer registration -> manual review -> activation -> portal -> chat -> 
   await expect(requestRow).toBeVisible();
   await expect(requestRow.getByText("بانتظار الدفع")).toBeVisible();
 
-  adminPage.on("dialog", dialog => dialog.type() === "prompt" ? dialog.accept("E2E-TRANSFER-" + username) : dialog.accept());
+  adminPage.on("dialog", dialog => {
+    if (dialog.type() !== "prompt") return dialog.accept();
+    const prompt = dialog.message();
+    if (prompt.includes("المبلغ")) return dialog.accept("100");
+    if (prompt.includes("عملة")) return dialog.accept("USD");
+    if (prompt.includes("مرجع")) return dialog.accept("E2E-TRANSFER-" + username);
+    return dialog.dismiss();
+  });
   await requestRow.getByRole("button", { name: "تأكيد وصول المبلغ" }).click();
   await expect(requestRow.getByRole("button", { name: "اعتماد الاشتراك" })).toBeVisible();
   await requestRow.getByRole("button", { name: "اعتماد الاشتراك" }).click();
