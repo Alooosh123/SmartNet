@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+from decimal import Decimal
+from pydantic import Field
 
 class Token(BaseModel):
     access_token: str
@@ -133,7 +135,7 @@ class OwnerNotificationResponse(BaseModel):
 
 
 class ManualPaymentVerification(BaseModel):
-    amount: float
-    currency: str = "USD"
-    external_reference: str
-    notes: Optional[str] = None
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    external_reference: str = Field(min_length=5, max_length=160)
+    notes: Optional[str] = Field(default=None, max_length=500)
