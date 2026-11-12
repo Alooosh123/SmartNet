@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_admin
+from config.settings import settings
 from database import database, models
 from services.network_observer import collect_and_store, latest_metrics
 from services.diagnostic_agent import diagnose
@@ -26,7 +27,7 @@ async def network_overview(db: AsyncSession = Depends(database.get_db), current_
     result = await latest_metrics(db, limit=1)
     latest = result[0] if result else None
     return {
-        "monitoring_enabled": True,
+        "monitoring_enabled": settings.NETWORK_MONITOR_ENABLED,
         "latest": _metric_payload(latest) if latest else None,
         "agent_mode": "read-only",
         "router_commands_allowed": False,
