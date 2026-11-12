@@ -130,6 +130,7 @@ services:
       PAYMENT_DEMO_MODE: "false"
       MIKROTIK_DEMO_MODE: "false"
       BOT_API_BASE_URL: http://backend:8000
+      MARIADB_ROOT_PASSWORD: ""
     command: ["python", "-m", "bot.main_bot"]
     depends_on:
       backend:
