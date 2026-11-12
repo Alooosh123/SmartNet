@@ -13,7 +13,7 @@ from sqlalchemy import delete, select
 from config.settings import settings
 from database import models
 from database.database import AsyncSessionLocal
-from services.mikrotik_service import mikrotik_service
+from services.mikrotik_readonly_service import mikrotik_readonly_service
 
 logger = logging.getLogger(__name__)
 
@@ -48,11 +48,11 @@ async def collect_network_observation() -> dict:
     users = None
     errors = []
     try:
-        status_data = await asyncio.to_thread(mikrotik_service.get_status)
+        status_data = await asyncio.to_thread(mikrotik_readonly_service.get_status)
     except Exception as exc:
         errors.append(f"router status: {type(exc).__name__}")
     try:
-        users = await asyncio.to_thread(mikrotik_service.get_active_users)
+        users = await asyncio.to_thread(mikrotik_readonly_service.get_active_users)
     except Exception as exc:
         errors.append(f"active users: {type(exc).__name__}")
 
