@@ -23,7 +23,7 @@ async def test_network_observer_persists_aggregate_read_only_snapshot(monkeypatc
         "cpu-load": "91",
         "free-memory": "10485760",
     })
-    monkeypatch.setattr(network_observer.mikrotik_service, "get_active_users", lambda: [
+    monkeypatch.setattr(network_observer.mikrotik_readonly_service, "get_active_users", lambda: [
         {"user": "private-user", "address": "192.0.2.10", "mac-address": "00:00:00:00:00:01"},
         {"user": "another-user", "address": "192.0.2.11", "mac-address": "00:00:00:00:00:02"},
     ])
