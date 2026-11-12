@@ -55,6 +55,14 @@ def test_production_settings_rejects_unimplemented_payment_gateway():
             PAYMENT_CHECKOUT_URL="https://gateway.example/checkout",
         )
 
+def test_production_settings_rejects_reused_mikrotik_observer_account():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        _production_settings(
+            MIKROTIK_READONLY_USERNAME="smartnet-owner",
+        )
+
 def test_production_settings_reject_shared_mariadb_runtime_and_migration_user():
     from pydantic import ValidationError
 
