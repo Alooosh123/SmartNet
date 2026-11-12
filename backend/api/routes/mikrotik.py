@@ -172,6 +172,8 @@ async def approve_network_action(
         raise HTTPException(status_code=409, detail="لا يجوز اعتماد طلب العملية بواسطة نفس منشئه.")
     if request.action not in {"reboot_router", "disconnect_user"}:
         raise HTTPException(status_code=400, detail="نوع العملية غير مدعوم.")
+    if request.action == "disconnect_user" and not request.target:
+        raise HTTPException(status_code=400, detail="طلب الفصل لا يحتوي على اسم مستخدم.")
 
     try:
         if request.action == "reboot_router":
