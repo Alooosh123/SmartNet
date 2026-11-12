@@ -7,14 +7,19 @@ param(
 $ErrorActionPreference = "Stop"
 if (-not $ConfirmRestore) { throw "Pass -ConfirmRestore only after a verified backup and maintenance window." }
 if (-not (Test-Path $BackupPath)) { throw "Backup file not found: $BackupPath" }
-foreach ($name in @("MARIADB_DATABASE","MARIADB_USER","MARIADB_PASSWORD")) {
+foreach ($name in @("MARIADB_DATABASE","MARIADB_RESTORE_USER","MARIADB_RESTORE_PASSWORD")) {
     if (-not [Environment]::GetEnvironmentVariable($name)) { throw "Set protected environment variable $name first." }
 }
 $hostName = if ($env:MARIADB_HOST) { $env:MARIADB_HOST } else { "127.0.0.1" }
 $port = if ($env:MARIADB_PORT) { $env:MARIADB_PORT } else { "3306" }
-$defaults = Join-Path $env:TEMP ("smartnet-mariadb-" + [guid]::NewGuid().ToString("N") + ".cnf")
+$defaults = Join-Path $env:TEMP ("smartnet-mariadb-restore-" + [guid]::NewGuid().ToString("N") + ".cnf")
 try {
-    @("[client]","user=$env:MARIADB_USER","password=$env:MARIADB_PASSWORD","host=$hostName","port=$port","protocol=tcp","default-character-set=utf8mb4") | Set-Content -Encoding Ascii $defaults
+    @("[client]","user=$env:MARIADB_RESTORE_USER","password=$env:MARIADB_RESTORE_PASSWORD","host=$hostName","port=$port","protocol=tcp","default-character-set=utf8mb4") | Set-Content -Encoding Ascii $defaults
+    $acl = Get-Acl $defaults
+    $acl.SetAccessRuleProtection($true,$false)
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($env:USERNAME,"FullControl","Allow")
+    $acl.SetAccessRule($rule)
+    Set-Acl $defaults $acl
     if (Test-Path "$BackupPath.sha256") {
         $expected = ((Get-Content "$BackupPath.sha256" -Raw).Trim() -split '\s+')[0]
         $actual = (Get-FileHash -Algorithm SHA256 $BackupPath).Hash
