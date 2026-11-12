@@ -1,55 +1,46 @@
 <div dir="rtl">
 
-# SmartNet — نظام إدارة شبكات MikroTik وHotspot
+# SmartNet — نظام إدارة شبكة Hotspot
 
-نظام لإدارة شبكات Hotspot من خلال واجهة عربية، وواجهة API، وبوت Telegram اختياري. يدعم إنشاء كروت المشتركين وملفات PDF، متابعة المستخدمين، إدارة الاشتراكات وطلباتها.
-
-> **حالة المشروع:** تم استكمال بنية تشغيل وإدارة أولية على فرع `production-readiness`. التشغيل التجاري الفعلي يظل مشروطاً بإعداد بيانات مزود الدفع والراوتر الحقيقي وإجراء اختبارات القبول الموضحة في [دليل الإنتاج](docs/PRODUCTION_RUNBOOK.md).
+منصة عربية لإدارة اشتراكات Hotspot وشبكات MikroTik، توليد كروت المستخدمين وملفات PDF، مراجعة الحوالات، ودعم العملاء. تتضمن API مبنياً بـFastAPI، ولوحة React، وبوت Telegram اختياري، ومساعد تشخيص يعتمد قاعدة معرفة تشغيلية موثوقة.
 
 ## المكونات
 
-- **Backend:** Python 3.11+ وFastAPI وSQLAlchemy async.
-- **Admin Web:** React 18 + Vite، واجهة عربية RTL.
-- **Database:** SQLite للتطوير المحلي، وPostgreSQL للإنتاج.
-- **MikroTik:** وضع تجريبي محلي أو اتصال RouterOS API حقيقي.
-- **Subscriptions:** تسجيل طلبات، رفع إيصال خاص، مراجعة واعتماد إداري.
-- **PDF:** إصدار أوراق كروت Hotspot.
-- **Telegram:** بوت إداري اختياري ومقيد بقائمة IDs.
-- **Operations:** Alembic migrations وDocker Compose وGitHub Actions.
+- **Backend:** Python 3.11+ وFastAPI وSQLAlchemy Async.
+- **Frontend:** React 18 وVite 8 بواجهة عربية RTL.
+- **Database:** MariaDB 11.4 LTS في الإنتاج؛ SQLite للتطوير والاختبارات المحلية فقط.
+- **Runtime:** Podman وPodman Compose باستخدام ملفات Containerfile.
+- **HTTPS:** Caddy (اختياري عبر profile باسم edge).
+- **Router:** MikroTik RouterOS عبر API-SSL مع التحقق من الشهادة.
+- **AI:** مساعد OpenAI اختياري، وكيل تشخيص يعتمد ملفات Knowledge Base داخل المستودع.
+- **Monitoring:** عامل مراقبة للقراءة فقط، وسجل snapshots وتنبيهات وPrometheus metrics.
 
-## التشغيل المحلي على Windows
+## التشغيل المحلي للتطوير
 
-### 1. المتطلبات
-
-- Python 3.11 أو أحدث.
-- Node.js 20 أو أحدث.
-- npm.
-- لا تحتاج إلى MikroTik أو بوابة دفع لتشغيل وضع التطوير التجريبي.
-
-### 2. إعداد Backend
+### Backend
 
 من مجلد المشروع:
 
 ```powershell
 cd backend
-Copy-Item ..\.env.example .env
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements-dev.txt
+Copy-Item ..\.env.example .env
+```
+
+اترك الإعدادات المحلية على `ENVIRONMENT=development` و`DATABASE_BACKEND=sqlite` و`MIKROTIK_DEMO_MODE=true` أثناء التطوير فقط.
+
+```powershell
 uvicorn app:app --reload --host 127.0.0.1 --port 8000
 ```
 
-عند أول تشغيل ينشئ النظام حساب المدير الأول من `DASHBOARD_USERNAME` و`DASHBOARD_PASSWORD` الموجودين في ملف `backend/.env`. بعد الدخول غيّر كلمة المرور من زر «تغيير كلمة المرور» في القائمة الجانبية. مسار `/auth/change-password` يطلب كلمة المرور الحالية، وتُحفظ الجديدة مجزأة. لا تستخدم قيمة المثال في خادم عام.
+الوثائق: `http://127.0.0.1:8000/docs`
 
-- API: `http://127.0.0.1:8000`
-- Swagger: `http://127.0.0.1:8000/docs`
-- Health: `http://127.0.0.1:8000/api/health`
-- Readiness: `http://127.0.0.1:8000/api/health/ready`
+### Frontend
 
-### 3. إعداد الواجهة
-
-افتح نافذة PowerShell أخرى:
+في نافذة PowerShell أخرى:
 
 ```powershell
 cd frontend
@@ -58,118 +49,86 @@ npm install
 npm run dev
 ```
 
-افتح `http://localhost:5173`.
+الواجهة: `http://localhost:5173`
 
-تحتوي الواجهة على تسجيل دخول المدير، وإنشاء طلب اشتراك عميل، ولوحة معلومات الشبكة، وإدارة الراوتر والمستخدمين، وتوليد الكروت، وإدارة المشتركين، ومراجعة طلبات الدفع.
-
-### 4. الاختبارات
-
-من مجلد `backend` مع تفعيل البيئة الافتراضية:
+### الاختبارات المحلية
 
 ```powershell
-python -m compileall -q .
-python -m pytest -q
+cd backend
+python -m pytest -q tests
 ```
 
-الاختبارات الآلية تستخدم SQLite داخل الذاكرة، ولا تتصل براوتر حقيقي ولا ترسل مدفوعات أو رسائل Telegram.
-
-## إعداد MikroTik حقيقي
-
-في `backend/.env` غيّر القيم التالية بعد تجهيز الراوتر:
-
-```env
-MIKROTIK_DEMO_MODE=false
-MIKROTIK_HOST=عنوان-الراوتر-الخاص
-MIKROTIK_USERNAME=حساب-api-مخصص
-MIKROTIK_PASSWORD=كلمة-مرور-قوية
-MIKROTIK_PORT=8728
-```
-
-أنشئ حساباً محدود الصلاحيات على RouterOS، واسمح بالوصول من خادم SmartNet فقط عبر VPN أو شبكة خاصة. لا تفتح منفذ RouterOS API على الإنترنت العام. يجب إنشاء Profiles المطلوبة مسبقاً على الراوتر؛ أسماء مثل `1 Day` و`1 Week` في الواجهة لا تنشئ Profiles تلقائياً.
-
-عند تفعيل الوضع الحقيقي لا يقوم النظام بعرض بيانات Demo عند فشل الاتصال؛ بل يعيد خطأ واضحاً حتى لا يتم الخلط بين بيانات وهمية وحالة الشبكة الحقيقية.
-
-## التسجيل والدفع والاشتراكات
-
-1. يسجل العميل من الواجهة العامة ويحصل على رقم طلب ورمز خاص لمتابعته.
-2. يستخدم العميل بوابة الدفع الفعلية أو يرفع صورة حوالة للمراجعة.
-3. صورة الحوالة لا تعتبر إثبات دفع ولا تفعّل الحساب تلقائياً.
-4. إشعار الدفع الموثوق يضع الطلب في حالة مدفوع بانتظار مراجعة الإدارة.
-5. المدير يتحقق من وصول المبلغ ثم يعتمد الطلب من لوحة الإدارة.
-6. لا يصبح الحساب فعالاً إلا بعد موافقة الإدارة.
-
-### تكامل الدفع
-
-اختر `PAYMENT_PROVIDER_MODE=manual` للتحويلات اليدوية عبر المحافظ أو الحساب البنكي، أو `PAYMENT_PROVIDER_MODE=gateway` عند بناء Adapter وربط بوابة دفع فعلية. في وضع manual يرفع العميل الإيصال، ثم يؤكد المدير وصول المبلغ من لوحة الإدارة، ثم يعتمد الاشتراك منفصلاً. في وضع gateway اضبط `PAYMENT_CHECKOUT_URL` وفق رابط مزود الدفع. نقطة `POST /auth/registrations/{id}/confirm` تستقبل إشعاراً موثوقاً عبر رأس `X-Webhook-Secret` ومعرف معاملة `payment_ref`.
-
-**مهم:** هذه النقطة العامة لا تتحقق بنفسها من توقيع مزود خارجي أو مبلغ التسوية أو العملة أو تكرار Event ID. يجب بناء Adapter خاص بمزود الدفع المختار ليتحقق من التوقيع والمبلغ والعملة ورقم الفاتورة وحالة التسوية قبل استدعاء نقطة التأكيد. لا تعتبر المشروع مربوطاً ببوابة دفع حقيقية قبل تنفيذ واختبار ذلك الـ Adapter.
-
-في التطوير فقط، يمكن استخدام زر الدفع التجريبي؛ لكنه لا يعتمد الحساب، بل يتركه بانتظار موافقة المدير. الدفع التجريبي ممنوع في وضع الإنتاج.
-
-## Telegram Bot (اختياري)
-
-أضف إلى ملف `backend/.env`:
-
-```env
-TELEGRAM_BOT_TOKEN=توكن-البوت
-TELEGRAM_ADMIN_IDS=[123456789]
-BOT_API_BASE_URL=http://127.0.0.1:8000
-```
-
-شغّل من مجلد `backend`:
+ومن مجلد `frontend`:
 
 ```powershell
-python -m bot.main_bot
+npm run build
+npx playwright install chromium
+npm run test:e2e
 ```
 
-الأوامر: `/start` و`/status` و`/users` و`/cards` و`/generate 20 1 Day` و`/stats`. البوت يرفض المستخدمين غير الموجودين في قائمة المديرين.
-
-## تشغيل Docker للإنتاج
-
-ملف `.env` في جذر المشروع يجب أن يحتوي على بيانات إنتاج حقيقية قبل تشغيل Compose. انسخ `.env.example` ثم اضبط:
-
-- `ENVIRONMENT=production`.
-- أسرار JWT وWebhook عشوائية منفصلة بطول 32 حرفاً أو أكثر.
-- اسم مدير غير افتراضي وكلمة مرور قوية وفريدة.
-- `POSTGRES_PASSWORD` فريد بطول 16 حرفاً على الأقل.
-- بيانات PostgreSQL، بما فيها `POSTGRES_PASSWORD`.
-- `PAYMENT_DEMO_MODE=false` و`MIKROTIK_DEMO_MODE=false`.
-- في وضع gateway فقط: `PAYMENT_CHECKOUT_URL` الفعلي؛ في وضع manual تُراجع الحوالات يدوياً من لوحة الإدارة.
-- `CORS_ORIGINS` كقائمة JSON لعناوين HTTPS الدقيقة.
-- بيانات الراوتر الفعلي.
-
-بعد استكمال القيم:
+فحوص الاعتماديات:
 
 ```powershell
-docker compose up -d --build
-docker compose ps
-docker compose logs -f backend
+cd frontend
+npm audit --audit-level=moderate
+cd ..\backend
+pip-audit -r requirements.txt
 ```
 
-الواجهة متاحة افتراضياً على المنفذ 8080. ضع Reverse Proxy أمامها مع HTTPS وشهادة TLS. لتفعيل البوت الاختياري:
+## تشغيل MariaDB وPodman
 
-```powershell
-docker compose --profile telegram up -d --build
+SmartNet لا يعتمد Docker أو PostgreSQL. قاعدة البيانات الإنتاجية هي MariaDB، والحاويات تعمل بواسطة Podman.
+
+1. ثبّت Podman Desktop أو Podman CLI ووفّر Compose provider (مثل podman-compose). على Windows شغّل Podman Machine.
+2. انسخ `.env.example` إلى `.env` في جذر المشروع.
+3. غيّر جميع كلمات المرور والأسرار، واجعل `DATABASE_BACKEND=mariadb`، وأدخل قيم MariaDB، ومعلومات HTTPS والراوتر الحقيقية.
+4. لا تستخدم بيانات المثال أو إعدادات demo في الإنتاج.
+
+تشغيل قاعدة البيانات والواجهة الخلفية والواجهة على شبكة Podman:
+
+```bash
+podman-compose -f podman-compose.yml up -d --build mariadb backend frontend
 ```
 
-تشغيل الإنتاج يرفض تلقائياً الإعدادات التجريبية، والأسرار الافتراضية، وSQLite، وعناوين CORS غير HTTPS.
+يُتاح الويب محلياً على `http://127.0.0.1:8080`، وتُربط MariaDB محلياً فقط على المنفذ `127.0.0.1:3307`. لا تُفتح قاعدة البيانات على الإنترنت.
 
-## قاعدة البيانات والهجرات
+لتفعيل HTTPS عبر Caddy بعد توجيه DNS للنطاق إلى الخادم وضبط `DOMAIN` و`ACME_EMAIL`:
 
-يستخدم Docker أمر `alembic upgrade head` قبل بدء Backend. قاعدة البيانات المحلية SQLite تُنشأ تلقائياً وتُجرى لها ترقية توافقية عند التشغيل.
+```bash
+podman-compose -f podman-compose.yml --profile edge up -d --build
+```
 
-الهجرة الأولى هي Baseline للمخطط الحالي. قبل استخدام Alembic على قاعدة بيانات PostgreSQL قديمة أو تحتوي بيانات، خذ نسخة احتياطية وراجع [دليل الإنتاج](docs/PRODUCTION_RUNBOOK.md)؛ لا تطبقها على قاعدة بيانات غير مفحوصة.
+لبوت Telegram (اختياري):
 
-## وثائق الأمان والتشغيل
+```bash
+podman-compose -f podman-compose.yml --profile telegram up -d --build telegram-bot
+```
 
-- [SECURITY.md](SECURITY.md) — الأسرار، ملفات العملاء، الدفع، وحدود التكامل.
-- [docs/PRODUCTION_RUNBOOK.md](docs/PRODUCTION_RUNBOOK.md) — خطوات التشغيل والتهيئة.
-- [backend/tests/README.md](backend/tests/README.md) — تشغيل الاختبارات.
+يمكن استخدام `podman compose` بدلاً من `podman-compose` عندما يكون Compose provider مضبوطاً في Podman Desktop. راجع `docs/PRODUCTION_RUNBOOK.md` قبل النشر.
 
-**تنبيه بيانات:** سبق أن احتوى المستودع على قاعدة SQLite وملفات إيصالات وملفات تشغيل مولدة. حذفها من النسخة الحالية لا يمحوها من تاريخ Git أو النسخ المتفرعة. يجب تدوير أي أسرار أو بيانات اعتماد يحتمل أنها كُشفت، ومراجعة تنظيف تاريخ Git عند الحاجة.
+## الدفع اليدوي والتسويات
 
-## الترخيص
+وضع الدفع الافتراضي في الإنتاج هو `PAYMENT_PROVIDER_MODE=manual`. العميل ينشئ طلباً ويرفع صورة التحويل. يراجع المسؤول التحويل في محفظته أو حسابه الفعلي، ويدخل المبلغ والعملة ومرجع الحوالة. بعد التحقق المالي المنفصل، يعتمد المسؤول الاشتراك. الصورة وحدها لا تثبت الدفع ولا تنشط العميل.
 
-MIT — راجع ملف الترخيص إذا تم إضافته إلى التوزيعة.
+المسار `GET /auth/payments/reconciliation` يعرض حالات عدم الاتساق. لا يُعد Gateway mode تكاملاً فعلياً لمزود الدفع حتى يُضاف Adapter خاص بالمزود يتحقق من التوقيع ومرجع الحدث والمبلغ والعملة وفق وثائقه الرسمية.
+
+## وكلاء الذكاء الاصطناعي
+
+- **Network Monitor:** يقرأ حالة الراوتر وعدد الجلسات والأداء، ويحفظ snapshots والتنبيهات. لا يمتلك وظائف تعديل RouterOS.
+- **Diagnostics Agent:** يسترجع إرشادات من `backend/knowledge_base` ثم يجيب بمصادرها. لا ينفذ أوامر.
+- **Customer Assistant:** يجيب عن الاشتراك والدعم، وتُحال أسئلة أعطال الشبكة إلى قاعدة المعرفة.
+- **Network Operations Approval:** طلب فصل مستخدم أو إعادة تشغيل الراوتر يُسجّل ويُراجع ويُنفّذ كخطوات منفصلة مع سجل تدقيق.
+
+تفعيل مراقبة الشبكة يتطلب إعداد `NETWORK_MONITOR_ENABLED=true` وتوصيل MikroTik حقيقي في شبكة إدارة خاصة.
+
+## الاختبارات وموثوقية النشر
+
+GitHub Actions يشغّل فحوص Backend وواجهة React وPlaywright، بالإضافة إلى تدقيق الاعتماديات واختبارات MariaDB/Podman بعد تفعيلها. نتائج CI لا تحل محل اختبار القبول على راوتر حقيقي أو حساب دفع حي.
+
+## وثائق إضافية
+
+- `SECURITY.md` — متطلبات الأمان وبوابات الإنتاج.
+- `docs/PRODUCTION_RUNBOOK.md` — خطوات النشر والنسخ الاحتياطي واختبار MikroTik.
+- `backend/knowledge_base/` — مصادر التشغيل والتشخيص.
 
 </div>
