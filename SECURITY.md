@@ -41,7 +41,8 @@
 ## Production controls
 
 - Keep `ENVIRONMENT=production`, `PAYMENT_DEMO_MODE=false`, `MIKROTIK_DEMO_MODE=false`, MariaDB and HTTPS-only CORS origins.
-- Keep Prometheus metrics administrator-authenticated; do not expose them publicly.
+- Protect `/api/metrics` with a dedicated random `METRICS_TOKEN` (at least 32 characters), compared in constant time. This token is separate from administrator JWTs.
+- Keep the Prometheus container on the private Podman network and bind its UI to loopback only. Do not expose port 9090 or the scrape token file publicly. Ignore and protect the host-side `secrets/metrics-token` file.
 - Configure Sentry only with a protected DSN and ensure request headers, credentials and personal identifiers are scrubbed.
 - Monitor failed health checks, authentication abuse, repeated router failures, payment reconciliation anomalies, failed backups and migration errors.
 - Review npm and Python security audit output on every release. Do not run blind `npm audit fix --force`; upgrade and retest breaking changes deliberately.
