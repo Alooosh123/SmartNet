@@ -17,8 +17,8 @@ def main() -> int:
     if not settings.MIKROTIK_USE_SSL or not settings.MIKROTIK_SSL_VERIFY or not settings.MIKROTIK_SSL_VERIFY_HOSTNAME:
         print("FAIL: API-SSL and certificate/hostname verification are required.")
         return 2
-    if not settings.MIKROTIK_HOST or not settings.MIKROTIK_USERNAME or not settings.MIKROTIK_PASSWORD:
-        print("FAIL: Set router host, dedicated username and password.")
+    if not settings.MIKROTIK_HOST or not settings.MIKROTIK_MONITOR_USERNAME or not settings.MIKROTIK_MONITOR_PASSWORD:
+        print("FAIL: Set router host and the dedicated read-only monitor username/password.")
         return 2
 
     try:
