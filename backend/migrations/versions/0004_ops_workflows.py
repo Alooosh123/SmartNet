@@ -31,8 +31,12 @@ def upgrade() -> None:
             if name not in columns:
                 op.add_column("registration_requests", column)
 
-        indexes = {item["name"] for item in sa.inspect(bind).get_indexes("registration_requests")}
-        if "uq_registration_payment_ref" not in indexes:
+        inspector = sa.inspect(bind)
+        indexes = {item["name"] for item in inspector.get_indexes("registration_requests")}
+        constraints = {
+            item.get("name") for item in inspector.get_unique_constraints("registration_requests")
+        }
+        if "uq_registration_payment_ref" not in indexes | constraints:
             duplicates = bind.execute(
                 sa.text(
                     "SELECT payment_ref, COUNT(*) AS total FROM registration_requests "
@@ -98,8 +102,12 @@ def downgrade() -> None:
         op.drop_index("ix_network_observations_observed_at", table_name="network_observations")
         op.drop_table("network_observations")
     if "registration_requests" in tables:
-        indexes = {item["name"] for item in sa.inspect(bind).get_indexes("registration_requests")}
-        if "uq_registration_payment_ref" in indexes:
+        inspector = sa.inspect(bind)
+        indexes = {item["name"] for item in inspector.get_indexes("registration_requests")}
+        constraints = {
+            item.get("name") for item in inspector.get_unique_constraints("registration_requests")
+        }
+        if "uq_registration_payment_ref" in indexes | constraints:
             op.drop_index("uq_registration_payment_ref", table_name="registration_requests")
         columns = {column["name"] for column in sa.inspect(bind).get_columns("registration_requests")}
         for name in (
