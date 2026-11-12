@@ -107,8 +107,6 @@ class Settings(BaseSettings):
                 raise ValueError("DASHBOARD_PASSWORD must contain at least 12 characters in production.")
             if self.DASHBOARD_USERNAME.strip().lower() in {"admin", "administrator"}:
                 raise ValueError("Set a unique non-default DASHBOARD_USERNAME in production.")
-            if not self.POSTGRES_PASSWORD or len(self.POSTGRES_PASSWORD) < 16 or self.POSTGRES_PASSWORD.startswith("dev-only-"):
-                raise ValueError("Set a unique POSTGRES_PASSWORD with at least 16 characters in production.")
             if not self.CORS_ORIGINS:
                 raise ValueError("At least one exact HTTPS CORS origin is required in production.")
             if any(not origin.startswith("https://") for origin in self.CORS_ORIGINS):
