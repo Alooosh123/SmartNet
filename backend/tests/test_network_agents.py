@@ -84,3 +84,51 @@ async def test_diagnostics_does_not_label_demo_values_as_live(monkeypatch):
     observations = await collect_read_only_observations()
     assert observations["available"] is False
     assert observations["mode"] == "demo"
+
+
+@pytest.mark.asyncio
+async def test_network_monitor_resolves_recovered_router_and_prunes_old_snapshots(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+
+    monkeypatch.setattr(network_monitor_agent.mikrotik_service, "get_status", lambda: {
+        "cpu-load": "10",
+        "free-memory": "2048",
+        "total-memory": "4096",
+        "uptime": "5d",
+        "version": "7.18",
+    })
+    monkeypatch.setattr(network_monitor_agent.mikrotik_service, "get_active_users", lambda: [])
+    monkeypatch.setattr(settings, "NETWORK_CPU_ALERT_THRESHOLD", 85)
+    monkeypatch.setattr(settings, "NETWORK_ACTIVE_USERS_ALERT_THRESHOLD", 500)
+    monkeypatch.setattr(settings, "NETWORK_SNAPSHOT_RETENTION_DAYS", 7)
+
+    async with session_factory() as session:
+        old_alert = models.NetworkAlert(
+            code="router_unreachable",
+            severity="critical",
+            message="Router was not reachable.",
+            active=True,
+        )
+        old_snapshot = models.NetworkSnapshot(
+            cpu_load=90,
+            active_users=12,
+            created_at=datetime.now(timezone.utc) - timedelta(days=10),
+        )
+        session.add_all([old_alert, old_snapshot])
+        await session.commit()
+        alert_id = old_alert.id
+        snapshot_id = old_snapshot.id
+
+        await network_monitor_agent.collect_network_snapshot(session)
+
+        refreshed_alert = await session.get(models.NetworkAlert, alert_id)
+        deleted_snapshot = await session.get(models.NetworkSnapshot, snapshot_id)
+        assert refreshed_alert is not None and refreshed_alert.active is False
+        assert deleted_snapshot is None
+
+    await engine.dispose()
