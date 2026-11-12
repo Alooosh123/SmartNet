@@ -1,13 +1,16 @@
 import { test, expect } from "@playwright/test";
 
-const username = "e2e-portal-customer";
 const customerPassword = "SmartNet-customer-password-2026!";
 const png = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAFElEQVR4nGMUqQhgwAaYsIoOWgkAsPQA7HvjDaMAAAAASUVORK5CYII=",
   "base64",
 );
 
-test("customer registration -> manual review -> activation -> portal -> chat -> card PDF", async ({ browser, page }) => {
+test("customer registration -> manual review -> activation -> portal -> chat -> card PDF", async ({ browser, page }, testInfo) => {
+  // Each retry uses a fresh identity so a failed previous attempt cannot leave
+  // an unprocessed registration that blocks the next attempt.
+  const username = `e2e-portal-customer-${testInfo.retry}-${Date.now()}`;
+
   // Customer creates a registration and uploads proof; the receipt must not
   // activate the account or mark payment as verified.
   await page.goto("/");
@@ -49,7 +52,7 @@ test("customer registration -> manual review -> activation -> portal -> chat -> 
     if (prompt.includes("مرجع")) return dialog.accept("E2E-TRANSFER-" + username);
     return dialog.dismiss();
   });
-  await requestRow.getByRole("button", { name: "تأكيد وصول المبلغ" }).click();
+  await requestRow.getByRole("button", { name: "توثيق الحوالة" }).click();
   await expect(requestRow.getByRole("button", { name: "اعتماد الاشتراك" })).toBeVisible();
   await requestRow.getByRole("button", { name: "اعتماد الاشتراك" }).click();
   await expect(requestRow.getByText("معتمد")).toBeVisible();
