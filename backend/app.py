@@ -1,10 +1,13 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+from collections import deque
+from time import monotonic
 import asyncio
 import logging
 import shutil
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -149,6 +152,65 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="SmartNet API", version="1.1.0", lifespan=lifespan)
+
+# Caddy is intentionally a simple reverse proxy. Apply per-client request limits
+# inside the application so the same protection remains active with any proxy.
+_RATE_LIMIT_BUCKETS: dict[tuple[str, str], deque[float]] = {}
+
+
+def _rate_limit_policy(method: str, path: str):
+    if method != "POST":
+        return None
+    if path == "/auth/login":
+        return ("login", 5, 60)
+    if path == "/auth/register":
+        return ("registration", 10, 60)
+    parts = path.strip("/").split("/")
+    if len(parts) == 4 and parts[0:2] == ["auth", "registrations"] and parts[3] == "receipt":
+        return ("receipt-upload", 5, 60)
+    if len(parts) == 4 and parts[0:2] == ["auth", "registrations"] and parts[3] == "verify-manual":
+        return ("manual-payment-verification", 10, 60)
+    if path == "/auth/reconciliation/statement":
+        return ("statement-upload", 5, 60)
+    if path == "/mikrotik/reboot":
+        return ("router-reboot", 3, 60)
+    if path == "/cards/generate":
+        return ("card-generation", 10, 60)
+    return None
+
+
+@app.middleware("http")
+async def enforce_request_rate_limits(request: Request, call_next):
+    policy = _rate_limit_policy(request.method, request.url.path)
+    if policy is None:
+        return await call_next(request)
+
+    route_key, limit, window_seconds = policy
+    client_ip = request.client.host if request.client else "unknown"
+    key = (client_ip, route_key)
+    now = monotonic()
+    events = _RATE_LIMIT_BUCKETS.setdefault(key, deque())
+    while events and now - events[0] >= window_seconds:
+        events.popleft()
+
+    if len(events) >= limit:
+        retry_after = max(1, int(window_seconds - (now - events[0])))
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "تم تجاوز عدد المحاولات المسموح. حاول مجدداً بعد قليل."},
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    events.append(now)
+    # Bound memory use if a server receives requests from many short-lived IPs.
+    if len(_RATE_LIMIT_BUCKETS) > 10000:
+        expired_before = now - window_seconds
+        for bucket_key, bucket in list(_RATE_LIMIT_BUCKETS.items()):
+            while bucket and bucket[0] < expired_before:
+                bucket.popleft()
+            if not bucket:
+                _RATE_LIMIT_BUCKETS.pop(bucket_key, None)
+    return await call_next(request)
 
 is_development = settings.ENVIRONMENT.lower() != "production"
 app.add_middleware(
