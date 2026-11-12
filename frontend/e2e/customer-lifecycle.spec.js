@@ -41,7 +41,17 @@ test("customer registration -> manual review -> activation -> portal -> chat -> 
   await expect(requestRow).toBeVisible();
   await expect(requestRow.getByText("بانتظار الدفع")).toBeVisible();
 
-  adminPage.on("dialog", dialog => dialog.accept());
+  adminPage.on("dialog", async dialog => {
+    if (dialog.type === "prompt") {
+      const prompt = dialog.message();
+      if (prompt.includes("USD")) await dialog.accept("100");
+      else if (prompt.includes("cash")) await dialog.accept("mobile_wallet");
+      else if (prompt.includes("مرجع")) await dialog.accept("E2E-MANUAL-TRANSFER-001");
+      else await dialog.accept();
+    } else {
+      await dialog.accept();
+    }
+  });
   await requestRow.getByRole("button", { name: "تأكيد وصول المبلغ" }).click();
   await expect(requestRow.getByRole("button", { name: "اعتماد الاشتراك" })).toBeVisible();
   await requestRow.getByRole("button", { name: "اعتماد الاشتراك" }).click();
@@ -73,6 +83,25 @@ test("customer registration -> manual review -> activation -> portal -> chat -> 
   await page.getByPlaceholder("اكتب رسالتك هنا...").fill("إعادة تشغيل الراوتر");
   await page.getByRole("button", { name: "إرسال" }).click();
   await expect(page.getByText(/لا أنفذها من رسالة محادثة/)).toBeVisible();
+
+  // A subscriber can request an operation but cannot execute it directly.
+  await page.getByRole("button", { name: "حسابي" }).click();
+  page.on("dialog", dialog => dialog.accept());
+  await page.getByRole("button", { name: "إعادة تشغيل الشبكة" }).click();
+  await expect(page.getByText(/تم تسجيل طلب إعادة التشغيل/)).toBeVisible();
+
+  // An administrator reviews the request and the demo router receives the approved action.
+  await adminPage.getByRole("button", { name: "موافقات الشبكة" }).click();
+  const actionRow = adminPage.getByRole("row").filter({ hasText: username });
+  await expect(actionRow).toBeVisible();
+  await actionRow.getByRole("button", { name: "اعتماد" }).click();
+  await expect(actionRow.getByText("executed")).toBeVisible();
+
+  await adminPage.getByRole("button", { name: "المطابقة المالية" }).click();
+  await expect(adminPage.getByText("E2E-MANUAL-TRANSFER-001")).toBeVisible();
+  await adminPage.getByRole("button", { name: "مراقبة الشبكة" }).click();
+  await adminPage.getByRole("button", { name: "جمع قراءة الآن" }).click();
+  await expect(adminPage.getByText("قراءة فقط")).toBeVisible();
 
   await adminContext.close();
 });
