@@ -77,7 +77,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("username", sa.String(length=255), nullable=False),
         sa.Column("sender", sa.String(length=255), nullable=False),
-        sa.Column("message", sa.String(length=255), nullable=False),
+        sa.Column("message", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
     op.create_index("ix_chat_messages_username", "chat_messages", ["username"], unique=False)
@@ -87,7 +87,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("action", sa.String(length=255), nullable=False),
         sa.Column("performed_by", sa.String(length=255), nullable=False),
-        sa.Column("details", sa.String(length=255), nullable=True),
+        sa.Column("details", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
 
