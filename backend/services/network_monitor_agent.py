@@ -7,7 +7,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from config.settings import settings
 from database import models
@@ -74,19 +74,27 @@ async def collect_network_snapshot(session) -> models.NetworkSnapshot:
             f"Active Hotspot users {user_count} reached threshold {settings.NETWORK_ACTIVE_USERS_ALERT_THRESHOLD}.",
         )
 
-    # Resolve threshold alerts automatically when a later successful observation
-    # shows the measured value has returned below its configured limit.
+    # Resolve threshold/connectivity alerts after a successful observation.
+    resolved_at = datetime.now(timezone.utc)
     active_alerts = await session.execute(
         select(models.NetworkAlert).where(models.NetworkAlert.active.is_(True))
     )
     for alert in active_alerts.scalars().all():
-        if alert.code == "router_cpu_high" and cpu is not None and cpu < settings.NETWORK_CPU_ALERT_THRESHOLD:
+        should_resolve = (
+            alert.code == "router_unreachable"
+            or (alert.code == "router_cpu_high" and cpu is not None and cpu < settings.NETWORK_CPU_ALERT_THRESHOLD)
+            or (alert.code == "active_users_high" and user_count < settings.NETWORK_ACTIVE_USERS_ALERT_THRESHOLD)
+        )
+        if should_resolve:
             alert.active = False
-            alert.resolved_at = datetime.now(timezone.utc)
-        elif alert.code == "active_users_high" and user_count < settings.NETWORK_ACTIVE_USERS_ALERT_THRESHOLD:
-            alert.active = False
-            alert.resolved_at = datetime.now(timezone.utc)
+            alert.resolved_at = resolved_at
 
+    # Bound the history table so high-frequency monitoring cannot grow storage
+    # without limit. Alert/audit history is retained separately.
+    retention_cutoff = resolved_at - timedelta(days=settings.NETWORK_SNAPSHOT_RETENTION_DAYS)
+    await session.execute(
+        delete(models.NetworkSnapshot).where(models.NetworkSnapshot.created_at < retention_cutoff)
+    )
     await session.commit()
     await session.refresh(snapshot)
     return snapshot
