@@ -297,14 +297,38 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
     # for high-impact reboot requests.
     forbidden_reboot = client.post("/mikrotik/reboot", headers=monthly_headers)
     assert forbidden_reboot.status_code == 403
+    # Provision a second administrator so dual-control approval can work.
+    created_admin = client.post(
+        "/auth/admins",
+        headers=admin_headers,
+        json={"username": "e2e-review-admin", "password": "E2E-review-admin-password-2026!"},
+    )
+    assert created_admin.status_code == 200, created_admin.text
+    reviewer_token = _login(client, "e2e-review-admin", "E2E-review-admin-password-2026!")
+    reviewer_headers = {"Authorization": f"Bearer {reviewer_token}"}
+    assert client.get("/auth/admins", headers=reviewer_headers).status_code == 200
+
     admin_reboot_request = client.post("/mikrotik/reboot", headers=admin_headers)
     assert admin_reboot_request.status_code == 202
+    operation_id = admin_reboot_request.json()["operation_id"]
     admin_self_approval = client.post(
-        f"/mikrotik/operations/{admin_reboot_request.json()['operation_id']}/approve",
+        f"/mikrotik/operations/{operation_id}/approve",
         headers=admin_headers,
         json={"note": "Must be rejected"},
     )
     assert admin_self_approval.status_code == 409
+    reviewer_approval = client.post(
+        f"/mikrotik/operations/{operation_id}/approve",
+        headers=reviewer_headers,
+        json={"note": "Approved by a different administrator"},
+    )
+    assert reviewer_approval.status_code == 200
+    reviewer_execution = client.post(
+        f"/mikrotik/operations/{operation_id}/execute",
+        headers=reviewer_headers,
+    )
+    assert reviewer_execution.status_code == 200
+    assert reviewer_execution.json()["status"] == "executed"
 
     reconciliation = client.get("/auth/payments/reconciliation", headers=admin_headers)
     assert reconciliation.status_code == 200
