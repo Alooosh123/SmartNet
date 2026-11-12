@@ -79,7 +79,7 @@ class ChatMessage(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(255), index=True, nullable=False)
     sender = Column(String(255), nullable=False)
-    message = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -88,7 +88,7 @@ class AuditLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     action = Column(String(255), nullable=False)
     performed_by = Column(String(255), nullable=False)
-    details = Column(String(255), nullable=True)
+    details = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
