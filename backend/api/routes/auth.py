@@ -410,8 +410,12 @@ async def verify_manual_payment(
     wallet account outside SmartNet. It marks payment as verified but does not
     activate the client; activation remains a separate approval action.
     """
+    # Serialize verification for one registration so two operators cannot
+    # concurrently create two financial confirmations for the same request.
     result = await db.execute(
-        select(models.RegistrationRequest).where(models.RegistrationRequest.id == reg_id)
+        select(models.RegistrationRequest)
+        .where(models.RegistrationRequest.id == reg_id)
+        .with_for_update()
     )
     reg = result.scalars().first()
     if not reg:
@@ -470,7 +474,13 @@ async def approve_registration(
     current_admin = Depends(get_current_admin)
 ):
     """Approve a registration, create a client account with plan permissions and expiry."""
-    result = await db.execute(select(models.RegistrationRequest).where(models.RegistrationRequest.id == reg_id))
+    # Lock the registration while validating payment and creating the client.
+    # This prevents concurrent approval requests from renewing/creating twice.
+    result = await db.execute(
+        select(models.RegistrationRequest)
+        .where(models.RegistrationRequest.id == reg_id)
+        .with_for_update()
+    )
     reg = result.scalars().first()
     if not reg:
         raise HTTPException(status_code=404, detail="طلب التسجيل غير موجود")
