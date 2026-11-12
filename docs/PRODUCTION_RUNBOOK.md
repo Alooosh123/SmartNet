@@ -25,7 +25,7 @@ Do not change a PostgreSQL connection string to MariaDB and assume data has migr
 - MIGRATION_DATABASE_URL=mysql+asyncmy://... with a dedicated DDL account, separate from the runtime account.
 - PAYMENT_PROVIDER_MODE=manual until a provider-specific adapter is implemented and validated.
 - PAYMENT_DEMO_MODE=false.
-- MIKROTIK_DEMO_MODE=false, with actual router host/user/password/port reachable only over VPN/private management network.
+- MIKROTIK_DEMO_MODE=false, with separate operational and read-only RouterOS accounts/passwords reachable only over VPN/private management network. Observer account must have read+api policies only.
 - Exact HTTPS CORS_ORIGINS.
 - MARIADB_* backup environment variables.
 - NETWORK_OBSERVER_ENABLED=true and reviewed thresholds.
