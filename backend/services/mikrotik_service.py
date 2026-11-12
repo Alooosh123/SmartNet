@@ -33,6 +33,9 @@ class MikroTikService:
             password=settings.MIKROTIK_PASSWORD,
             port=settings.MIKROTIK_PORT,
             plaintext_login=True,
+            use_ssl=settings.MIKROTIK_USE_SSL,
+            ssl_verify=settings.MIKROTIK_SSL_VERIFY,
+            ssl_verify_hostname=settings.MIKROTIK_SSL_VERIFY_HOSTNAME,
         )
         return connection
 
@@ -54,6 +57,22 @@ class MikroTikService:
             resource = api.get_resource('/system/resource')
             res = resource.get()
             return res[0] if res else {}
+        finally:
+            if connection:
+                connection.disconnect()
+
+    def get_profiles(self):
+        """Return configured Hotspot profiles without modifying the router."""
+        if settings.MIKROTIK_DEMO_MODE:
+            return [
+                {"name": "1 Day"},
+                {"name": "1 Week"},
+                {"name": "1 Month"},
+            ]
+        connection = self._get_api()
+        try:
+            api = connection.get_api()
+            return api.get_resource("/ip/hotspot/user/profile").get()
         finally:
             if connection:
                 connection.disconnect()
