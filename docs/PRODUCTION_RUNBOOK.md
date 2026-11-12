@@ -25,21 +25,21 @@ bash scripts/check-production-env.sh
 ```
 
 The preflight validates secrets, demo flags, TLS settings, separate MikroTik accounts, and HTTPS configuration without printing secret values.
-5. Configure RouterOS production settings: `MIKROTIK_DEMO_MODE=false`, `MIKROTIK_USE_SSL=true`, `MIKROTIK_SSL_VERIFY=true`, `MIKROTIK_SSL_VERIFY_HOSTNAME=true`, the secure API-SSL port (normally 8729), router address, a separate read-only monitor account (`MIKROTIK_MONITOR_USERNAME/PASSWORD`) and a separate write-capable operator account (`MIKROTIK_OPERATOR_USERNAME/PASSWORD`). Do not reuse the operator account in the monitoring worker.
-6. Set a payment mode. For now `PAYMENT_PROVIDER_MODE=manual` is the complete operational path. Do not choose gateway mode until its provider-specific adapter is implemented and accepted.
-7. Start services:
+6. Configure RouterOS production settings: `MIKROTIK_DEMO_MODE=false`, `MIKROTIK_USE_SSL=true`, `MIKROTIK_SSL_VERIFY=true`, `MIKROTIK_SSL_VERIFY_HOSTNAME=true`, the secure API-SSL port (normally 8729), router address, a separate read-only monitor account (`MIKROTIK_MONITOR_USERNAME/PASSWORD`) and a separate write-capable operator account (`MIKROTIK_OPERATOR_USERNAME/PASSWORD`). Do not reuse the operator account in the monitoring worker.
+7. Set a payment mode. For now `PAYMENT_PROVIDER_MODE=manual` is the complete operational path. Do not choose gateway mode until its provider-specific adapter is implemented and accepted.
+8. Start services:
 
 ```bash
 podman-compose -f podman-compose.yml up -d --build mariadb backend frontend
 ```
 
-8. Check `http://127.0.0.1:8080/api/health/ready` through the local frontend reverse proxy, API login, and backend readiness. For public HTTPS, point DNS to the host and enable Caddy:
+9. Check `http://127.0.0.1:8080/api/health/ready` through the local frontend reverse proxy, API login, and backend readiness. For public HTTPS, point DNS to the host and enable Caddy:
 
 ```bash
 podman-compose -f podman-compose.yml up -d caddy
 ```
 
-9. Start Telegram only when the token and numeric admin allow-list have been configured:
+10. Start Telegram only when the token and numeric admin allow-list have been configured:
 
 ```bash
 podman-compose -f podman-compose.yml up -d telegram-bot
@@ -123,12 +123,12 @@ The Diagnostics Agent searches `backend/knowledge_base` and optionally asks the 
 Admin-only monitoring endpoints:
 - `GET /mikrotik/monitor/snapshots`
 - `GET /mikrotik/monitor/alerts`
-- `GET /api/metrics` (requires administrator authentication)
+- `GET /api/metrics` (requires the dedicated Bearer `METRICS_TOKEN`, not an administrator JWT)
 
 Diagnostic endpoint:
 - `POST /mikrotik/diagnose`
 
-## 7. Prometheus monitoring profile
+## 7. Prometheus monitoring
 
 SmartNet exposes `/api/metrics` only to a dedicated machine token, not to customer JWTs. Production validation requires a strong `METRICS_TOKEN` when metrics are enabled.
 
@@ -172,7 +172,7 @@ Never allow free-text chat or an AI agent to bypass this workflow.
 - Restrict Prometheus scrape access using the dedicated `METRICS_TOKEN`; keep Prometheus itself on the internal network and loopback-only host binding.
 - Review logs for repeated router failures, TLS errors, unexpected operation states, payment anomalies and backup failures.
 - Run `npm audit --audit-level=moderate`, `pip-audit -r backend/requirements.txt`, backend tests, Playwright E2E, Podman compose validation and MariaDB migration/restore smoke tests and authenticated Prometheus target-health checks before deployment.
-- Complete a real-router acceptance test, manual wallet transfer test, backup restore test, HTTPS check and alert delivery test before onboarding users.
+- Complete a real-router acceptance test, manual wallet transfer test, backup restore test, HTTPS check and alert creation and visibility test before onboarding users.
 
 ## Remaining external dependencies
 
