@@ -125,18 +125,25 @@ class Settings(BaseSettings):
                 self.MARIADB_HOST, self.MARIADB_DATABASE, self.MARIADB_USER, self.MARIADB_PASSWORD
             ]):
                 raise ValueError("MARIADB_HOST, MARIADB_DATABASE, MARIADB_USER and MARIADB_PASSWORD are required.")
-            weak_db_passwords = [
-                name for name, value, minimum in (
-                    ("MARIADB_PASSWORD", self.MARIADB_PASSWORD, 16),
-                    ("MARIADB_ROOT_PASSWORD", self.MARIADB_ROOT_PASSWORD, 20),
-                )
-                if not value or len(value) < minimum or value.startswith("dev-only-")
-                or value.lower() in {"password", "changeme", "smartnet"}
-            ]
-            if weak_db_passwords:
-                raise ValueError("Weak or missing MariaDB secrets: " + ", ".join(weak_db_passwords))
-            if self.MARIADB_PASSWORD == self.MARIADB_ROOT_PASSWORD:
-                raise ValueError("MariaDB application and root passwords must be different.")
+            if (
+                len(self.MARIADB_PASSWORD) < 16
+                or self.MARIADB_PASSWORD.startswith("dev-only-")
+                or self.MARIADB_PASSWORD.lower() in {"password", "changeme", "smartnet"}
+            ):
+                raise ValueError("MARIADB_PASSWORD must be a strong unique secret with at least 16 characters.")
+            # The application connects with the restricted database user and must
+            # never receive the MariaDB root secret. Compose supplies the root
+            # secret only to the database service; validate it here only when an
+            # operator explicitly provides it to a standalone environment.
+            if self.MARIADB_ROOT_PASSWORD:
+                if (
+                    len(self.MARIADB_ROOT_PASSWORD) < 20
+                    or self.MARIADB_ROOT_PASSWORD.startswith("dev-only-")
+                    or self.MARIADB_ROOT_PASSWORD.lower() in {"password", "changeme", "smartnet"}
+                ):
+                    raise ValueError("MARIADB_ROOT_PASSWORD must contain at least 20 characters.")
+                if self.MARIADB_PASSWORD == self.MARIADB_ROOT_PASSWORD:
+                    raise ValueError("MariaDB application and root passwords must be different.")
             if self.METRICS_ENABLED and len(self.METRICS_TOKEN) < 32:
                 raise ValueError("METRICS_TOKEN must contain at least 32 characters when metrics are enabled.")
             if self.PAYMENT_PROVIDER_MODE != "manual":
