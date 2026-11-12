@@ -124,7 +124,7 @@ class Settings(BaseSettings):
                 self.MARIADB_HOST, self.MARIADB_DATABASE, self.MARIADB_USER, self.MARIADB_PASSWORD
             ]):
                 raise ValueError("MARIADB_HOST, MARIADB_DATABASE, MARIADB_USER and MARIADB_PASSWORD are required.")
-            if len(self.MARIADB_PASSWORD) < 16:
+            if len(self.MARIADB_PASSWORD) < 16 or self.MARIADB_PASSWORD.startswith("dev-only-") or self.MARIADB_PASSWORD.lower() in {"password", "changeme", "smartnet"}:
                 raise ValueError("MariaDB application and root passwords must be strong and unique.")
             if self.METRICS_ENABLED and len(self.METRICS_TOKEN) < 32:
                 raise ValueError("METRICS_TOKEN must contain at least 32 characters when metrics are enabled.")
