@@ -28,8 +28,10 @@ class Settings(BaseSettings):
     DASHBOARD_PASSWORD: str = "dev-only-SmartNet-Admin-Change-This-2026!"
 
     MIKROTIK_HOST: str = "192.168.88.1"
-    MIKROTIK_USERNAME: str = "smartnet-monitor"
-    MIKROTIK_PASSWORD: str = ""
+    MIKROTIK_MONITOR_USERNAME: str = "smartnet-monitor"
+    MIKROTIK_MONITOR_PASSWORD: str = ""
+    MIKROTIK_OPERATOR_USERNAME: str = ""
+    MIKROTIK_OPERATOR_PASSWORD: str = ""
     MIKROTIK_PORT: int = 8729
     MIKROTIK_DEMO_MODE: bool = True
     MIKROTIK_USE_SSL: bool = True
@@ -105,8 +107,12 @@ class Settings(BaseSettings):
                 raise ValueError("PAYMENT_DEMO_MODE must be false in production.")
             if self.MIKROTIK_DEMO_MODE:
                 raise ValueError("MIKROTIK_DEMO_MODE must be false in production.")
-            if not self.MIKROTIK_PASSWORD:
-                raise ValueError("MIKROTIK_PASSWORD is required in production.")
+            if not all([self.MIKROTIK_MONITOR_USERNAME, self.MIKROTIK_MONITOR_PASSWORD, self.MIKROTIK_OPERATOR_USERNAME, self.MIKROTIK_OPERATOR_PASSWORD]):
+                raise ValueError("Separate read-only MIKROTIK_MONITOR_* and write-capable MIKROTIK_OPERATOR_* credentials are required.")
+            if self.MIKROTIK_MONITOR_USERNAME == self.MIKROTIK_OPERATOR_USERNAME:
+                raise ValueError("MikroTik monitor and operator accounts must be distinct.")
+            if len(self.MIKROTIK_MONITOR_PASSWORD) < 16 or len(self.MIKROTIK_OPERATOR_PASSWORD) < 16:
+                raise ValueError("MikroTik monitor and operator passwords must each contain at least 16 characters.")
             if not self.MIKROTIK_USE_SSL or not self.MIKROTIK_SSL_VERIFY or not self.MIKROTIK_SSL_VERIFY_HOSTNAME:
                 raise ValueError("Production MikroTik connections must use verified TLS.")
             if self.DATABASE_BACKEND != "mariadb" and not (
