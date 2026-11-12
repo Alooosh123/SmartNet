@@ -28,6 +28,7 @@ def _production_settings(**overrides):
         "DASHBOARD_PASSWORD": "admin-strong-password-2026!",
         "PAYMENT_DEMO_MODE": False,
         "MIKROTIK_DEMO_MODE": False,
+        "MIKROTIK_USERNAME": "smartnet-operator",
         "MIKROTIK_PASSWORD": "router-strong-password",
         "MIKROTIK_READONLY_USERNAME": "smartnet-observer",
         "MIKROTIK_READONLY_PASSWORD": "observer-strong-password",
@@ -60,7 +61,7 @@ def test_production_settings_rejects_reused_mikrotik_observer_account():
 
     with pytest.raises(ValidationError):
         _production_settings(
-            MIKROTIK_READONLY_USERNAME="smartnet-owner",
+            MIKROTIK_READONLY_USERNAME="smartnet-operator",
         )
 
 def test_production_settings_reject_shared_mariadb_runtime_and_migration_user():
