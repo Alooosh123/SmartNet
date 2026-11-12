@@ -44,6 +44,15 @@ def test_production_settings_accept_realistic_manual_payment_configuration():
     assert settings.PAYMENT_PROVIDER_MODE == "manual"
 
 
+def test_production_settings_rejects_unimplemented_payment_gateway():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        _production_settings(
+            PAYMENT_PROVIDER_MODE="gateway",
+            PAYMENT_CHECKOUT_URL="https://gateway.example/checkout",
+        )
+
 def test_production_settings_reject_shared_mariadb_runtime_and_migration_user():
     from pydantic import ValidationError
 
