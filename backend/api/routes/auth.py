@@ -5,6 +5,9 @@ import uuid
 import hashlib
 import hmac
 import secrets
+import csv
+import io
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from PIL import Image
 from fastapi import APIRouter, Depends, HTTPException, status, Header, Query, UploadFile, File
@@ -326,14 +329,14 @@ async def list_registrations(db: AsyncSession = Depends(database.get_db), curren
 @router.post('/registrations/{reg_id}/verify-manual')
 async def verify_manual_payment(
     reg_id: int,
+    payload: schemas.ManualPaymentVerification,
     db: AsyncSession = Depends(database.get_db),
     current_admin = Depends(get_current_admin),
 ):
-    """Record an administrator's manual confirmation of money received.
+    """Verify an actual wallet/bank transfer with reference, exact amount and currency.
 
-    This is an auditable decision made only after checking the actual bank/mobile
-    wallet account outside SmartNet. It marks payment as verified but does not
-    activate the client; activation remains a separate approval action.
+    Receipt files are supporting evidence only. This action records the financial
+    verification; account activation remains a separate administrator action.
     """
     result = await db.execute(
         select(models.RegistrationRequest).where(models.RegistrationRequest.id == reg_id)
@@ -344,22 +347,214 @@ async def verify_manual_payment(
     if reg.processed:
         raise HTTPException(status_code=409, detail="تم اعتماد هذا الطلب مسبقاً")
     if reg.paid:
-        return {"ok": True, "paid": True, "processed": False, "detail": "الدفع مسجل كمؤكد مسبقاً"}
+        raise HTTPException(status_code=409, detail="تم تسجيل الدفع لهذا الطلب مسبقاً")
 
+    expected_amount = Decimal(str(reg.price or 0)).quantize(Decimal("0.01"))
+    submitted_amount = payload.amount.quantize(Decimal("0.01"))
+    expected_currency = (reg.currency or "USD").upper()
+    if submitted_amount != expected_amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"المبلغ لا يطابق قيمة الباقة المتوقعة ({expected_amount} {expected_currency}).",
+        )
+    if payload.currency != expected_currency:
+        raise HTTPException(
+            status_code=400,
+            detail=f"عملة الحوالة يجب أن تكون {expected_currency}.",
+        )
+
+    duplicate = await db.execute(
+        select(models.RegistrationRequest).where(
+            models.RegistrationRequest.payment_ref == payload.payment_reference,
+            models.RegistrationRequest.id != reg_id,
+        )
+    )
+    if duplicate.scalars().first():
+        raise HTTPException(status_code=409, detail="مرجع الحوالة مستخدم في طلب آخر.")
+
+    verifier = getattr(current_admin, "username", "admin")
     reg.paid = True
-    if not reg.payment_ref or reg.payment_ref.startswith("smartnet-"):
-        reg.payment_ref = f"manual-{reg.id}-{uuid.uuid4().hex}"
+    reg.payment_ref = payload.payment_reference
+    reg.payment_verified_amount = submitted_amount
+    reg.payment_verified_currency = payload.currency
+    reg.payment_verified_by = verifier
+    reg.payment_verified_at = datetime.now(timezone.utc)
+    reg.payment_verification_note = payload.note.strip()
     db.add(models.AuditLog(
         action="manual_payment_verified",
-        performed_by=getattr(current_admin, "username", "admin"),
-        details=f"Administrator manually verified money receipt for registration #{reg.id}; client activation remains pending",
+        performed_by=verifier,
+        details=(
+            f"Verified transfer for registration #{reg.id}; "
+            f"reference={payload.payment_reference}; "
+            f"amount={submitted_amount} {payload.currency}; "
+            "activation remains a separate approval."
+        ),
     ))
     await db.commit()
     return {
         "ok": True,
         "paid": True,
         "processed": False,
-        "message": "تم تسجيل تأكيد وصول المبلغ. يجب اعتماد الاشتراك بصورة منفصلة لتفعيل الحساب.",
+        "payment_reference": payload.payment_reference,
+        "verified_amount": str(submitted_amount),
+        "currency": payload.currency,
+        "message": "تم التحقق من الحوالة وتسجيلها. يجب اعتماد الاشتراك بصورة منفصلة.",
+    }
+
+
+@router.get('/reconciliation/report')
+async def get_payment_reconciliation_report(
+    db: AsyncSession = Depends(database.get_db),
+    current_admin = Depends(get_current_admin),
+):
+    """Summarize internal payments and identify records needing finance review."""
+    result = await db.execute(
+        select(models.RegistrationRequest).order_by(models.RegistrationRequest.id.desc())
+    )
+    registrations = result.scalars().all()
+    verified = [item for item in registrations if item.paid and item.payment_verified_by]
+    pending_activation = [item for item in verified if not item.processed]
+    receipts_unverified = [item for item in registrations if item.receipt_image and not item.paid]
+
+    ref_groups = {}
+    for item in verified:
+        if item.payment_ref:
+            ref_groups.setdefault(item.payment_ref, []).append(item.id)
+    duplicate_references = [
+        {"reference": reference, "registration_ids": ids}
+        for reference, ids in ref_groups.items() if len(ids) > 1
+    ]
+    verified_total = sum(
+        (Decimal(str(item.payment_verified_amount or 0)) for item in verified),
+        Decimal("0.00"),
+    )
+    return {
+        "currency": "USD",
+        "verified_count": len(verified),
+        "verified_total": str(verified_total),
+        "paid_pending_activation": [
+            {"registration_id": item.id, "username": item.username, "amount": str(item.payment_verified_amount),
+             "reference": item.payment_ref, "verified_by": item.payment_verified_by}
+            for item in pending_activation
+        ],
+        "receipts_waiting_finance_review": [
+            {"registration_id": item.id, "username": item.username, "price": item.price}
+            for item in receipts_unverified
+        ],
+        "unpaid_without_receipt": sum(1 for item in registrations if not item.paid and not item.receipt_image),
+        "duplicate_references": duplicate_references,
+        "note": "هذا تقرير مطابقة داخلية. لا يُعد بديلاً عن كشف المحفظة أو البنك.",
+    }
+
+
+@router.post('/reconciliation/statement')
+async def reconcile_payment_statement(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(database.get_db),
+    current_admin = Depends(get_current_admin),
+):
+    """Compare a normalized bank/wallet CSV statement without changing payments.
+
+    Required CSV headers: reference,amount,currency,status. Settled rows are
+    compared with manually verified SmartNet transfers; no automatic activation
+    or payment mutation is performed.
+    """
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="ارفع كشفاً بصيغة CSV فقط.")
+    contents = await file.read()
+    if not contents or len(contents) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="حجم ملف كشف الحساب يجب ألا يتجاوز 2 ميجابايت.")
+    try:
+        text_content = contents.decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(text_content))
+        required = {"reference", "amount", "currency", "status"}
+        if not reader.fieldnames or not required.issubset(set(reader.fieldnames)):
+            raise ValueError("CSV headers must include reference,amount,currency,status")
+        statement_rows = list(reader)
+    except (UnicodeDecodeError, csv.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"تعذر قراءة كشف CSV: {exc}")
+
+    if len(statement_rows) > 10000:
+        raise HTTPException(status_code=400, detail="الحد الأقصى لكشف المطابقة هو 10000 حركة.")
+
+    result = await db.execute(
+        select(models.RegistrationRequest).where(
+            models.RegistrationRequest.paid.is_(True),
+            models.RegistrationRequest.payment_verified_by.is_not(None),
+        )
+    )
+    internal = result.scalars().all()
+    internal_by_ref = {}
+    for item in internal:
+        if item.payment_ref:
+            internal_by_ref.setdefault(item.payment_ref, []).append(item)
+
+    seen_external = set()
+    matched = []
+    mismatches = []
+    external_only = []
+    invalid_rows = []
+    settled_statuses = {"settled", "paid", "completed", "success", "successful"}
+    for line_number, row in enumerate(statement_rows, start=2):
+        reference = (row.get("reference") or "").strip()
+        currency = (row.get("currency") or "").strip().upper()
+        status_value = (row.get("status") or "").strip().lower()
+        if status_value not in settled_statuses:
+            continue
+        try:
+            amount = Decimal((row.get("amount") or "").strip()).quantize(Decimal("0.01"))
+        except (InvalidOperation, ValueError):
+            invalid_rows.append({"line": line_number, "reason": "invalid amount"})
+            continue
+        if not reference or not currency:
+            invalid_rows.append({"line": line_number, "reason": "missing reference or currency"})
+            continue
+        if reference in seen_external:
+            invalid_rows.append({"line": line_number, "reason": "duplicate reference in statement", "reference": reference})
+            continue
+        seen_external.add(reference)
+        candidates = internal_by_ref.get(reference, [])
+        if not candidates:
+            external_only.append({"reference": reference, "amount": str(amount), "currency": currency})
+            continue
+        if len(candidates) != 1:
+            mismatches.append({"reference": reference, "reason": "duplicate internal reference"})
+            continue
+        item = candidates[0]
+        expected = Decimal(str(item.payment_verified_amount or 0)).quantize(Decimal("0.01"))
+        expected_currency = (item.payment_verified_currency or item.currency or "USD").upper()
+        if amount != expected or currency != expected_currency:
+            mismatches.append({
+                "reference": reference, "registration_id": item.id,
+                "expected_amount": str(expected), "actual_amount": str(amount),
+                "expected_currency": expected_currency, "actual_currency": currency,
+            })
+        else:
+            matched.append({"reference": reference, "registration_id": item.id, "amount": str(amount), "currency": currency})
+
+    internal_only = [
+        {"reference": reference, "registration_id": rows[0].id}
+        for reference, rows in internal_by_ref.items()
+        if reference not in seen_external
+    ]
+    digest = hashlib.sha256(contents).hexdigest()
+    db.add(models.AuditLog(
+        action="payment_statement_reconciled",
+        performed_by=getattr(current_admin, "username", "admin"),
+        details=(
+            f"CSV SHA256={digest}; matched={len(matched)}; mismatches={len(mismatches)}; "
+            f"external_only={len(external_only)}; internal_only={len(internal_only)}; invalid={len(invalid_rows)}"
+        ),
+    ))
+    await db.commit()
+    return {
+        "matched": matched,
+        "mismatches": mismatches,
+        "external_only": external_only,
+        "internal_only": internal_only,
+        "invalid_rows": invalid_rows,
+        "statement_sha256": digest,
+        "mutations_performed": False,
     }
 
 
@@ -379,6 +574,8 @@ async def approve_registration(
         raise HTTPException(status_code=400, detail="تمت معالجة هذا الطلب مسبقاً")
     if not reg.paid:
         raise HTTPException(status_code=400, detail="لا يمكن تفعيل المشترك قبل تأكيد الدفع")
+    if settings.PAYMENT_PROVIDER_MODE == "manual" and not reg.payment_verified_by:
+        raise HTTPException(status_code=409, detail="يجب توثيق مرجع الحوالة والمبلغ والعملة قبل اعتماد الاشتراك.")
 
     plan_key = reg.plan or "monthly"
     plan_info = PLANS.get(plan_key, PLANS["monthly"])
