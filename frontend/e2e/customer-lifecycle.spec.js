@@ -47,8 +47,9 @@ test("customer registration -> manual review -> activation -> portal -> chat -> 
   adminPage.on("dialog", dialog => {
     if (dialog.type() !== "prompt") return dialog.accept();
     const prompt = dialog.message();
-    if (prompt.includes("المبلغ")) return dialog.accept("100");
+    // The currency prompt also contains the word "المبلغ"; check currency first.
     if (prompt.includes("عملة")) return dialog.accept("USD");
+    if (prompt.includes("المبلغ")) return dialog.accept("100");
     if (prompt.includes("مرجع")) return dialog.accept("E2E-TRANSFER-" + username);
     return dialog.dismiss();
   });
