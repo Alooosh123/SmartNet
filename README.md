@@ -90,18 +90,18 @@ SmartNet لا يعتمد Docker أو PostgreSQL. قاعدة البيانات ا�
 podman-compose -f podman-compose.yml up -d --build mariadb backend frontend
 ```
 
-يُتاح الويب محلياً على `http://127.0.0.1:8080`، وتُربط MariaDB محلياً فقط على المنفذ `127.0.0.1:3307`. لا تُفتح قاعدة البيانات على الإنترنت.
+يُتاح الويب محلياً على `http://127.0.0.1:8080`، وتُربط MariaDB محلياً فقط على المنفذ `127.0.0.1:3307`. لا تُفتح قاعدة البيانات على الإنترنت. شغّل كل خدمة اختيارية بتحديد اسمها صراحةً في أمر `podman-compose`؛ لا يعتمد المشروع على Compose Profiles حتى يعمل مع podman-compose 1.0.6.
 
 لتفعيل HTTPS عبر Caddy بعد توجيه DNS للنطاق إلى الخادم وضبط `DOMAIN` و`ACME_EMAIL`:
 
 ```bash
-podman-compose -f podman-compose.yml --profile edge up -d --build
+podman-compose -f podman-compose.yml up -d --build caddy
 ```
 
 لبوت Telegram (اختياري):
 
 ```bash
-podman-compose -f podman-compose.yml --profile telegram up -d --build telegram-bot
+podman-compose -f podman-compose.yml up -d --build telegram-bot
 ```
 
 ### Prometheus للمراقبة المستمرة (اختياري)
@@ -115,7 +115,7 @@ set +a
 install -d -m 700 secrets
 umask 077
 printf '%s' "$METRICS_TOKEN" > secrets/metrics-token
-podman-compose -f podman-compose.yml --profile monitoring up -d prometheus
+podman-compose -f podman-compose.yml up -d prometheus
 ```
 
 واجهة Prometheus متاحة محلياً فقط على `http://127.0.0.1:9090`. نقطة `/api/metrics` في SmartNet تقبل هذا الرمز فقط، ولا تُعرَض عبر واجهة العميل أو Caddy.
