@@ -33,6 +33,7 @@ def _production_settings(**overrides):
         "MIKROTIK_OPERATOR_USERNAME": "smartnet-operator",
         "MIKROTIK_OPERATOR_PASSWORD": "operator-strong-password-2026",
         "DATABASE_BACKEND": "mariadb",
+        "DATABASE_URL": None,
         "MARIADB_HOST": "db",
         "MARIADB_DATABASE": "smartnet",
         "MARIADB_USER": "smartnet",
