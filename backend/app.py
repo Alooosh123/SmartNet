@@ -101,8 +101,13 @@ async def migrate_legacy_public_pdfs(session) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await run_sqlite_migrations(conn)
+        if settings.ENVIRONMENT.lower() == "production":
+            # Production schema changes are applied explicitly with Alembic
+            # before the service starts. Never create or mutate schema at startup.
+            await conn.execute(text("SELECT 1"))
+        else:
+            await conn.run_sync(Base.metadata.create_all)
+            await run_sqlite_migrations(conn)
 
     async with AsyncSessionLocal() as session:
         await migrate_legacy_public_pdfs(session)
