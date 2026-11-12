@@ -26,5 +26,5 @@ EOF
 if [[ -f "$backup.sha256" ]]; then
   sha256sum --check "$backup.sha256"
 fi
-gzip -dc "$backup" | mariadb --defaults-extra-file="$credentials"
+gzip -dc "$backup" | mariadb --defaults-extra-file="$credentials" "$MARIADB_DATABASE"
 echo "Restore completed from: $backup"
