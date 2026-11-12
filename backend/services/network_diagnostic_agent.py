@@ -93,7 +93,8 @@ async def diagnose_latest_network(db, question: str) -> dict:
                             f"قراءات الراوتر:\n<observations>{observation}</observations>\n\n"
                             f"قاعدة المعرفة المرجعية:\n<knowledge>{knowledge[:16000]}</knowledge>\n\n"
                             f"قارن الإجابة بهذه الخلاصة الاحتياطية عند الحاجة: {fallback}"
-                        ),                    },
+                        ),
+                    },
                 ],
                 max_tokens=500,
                 temperature=0.2,
