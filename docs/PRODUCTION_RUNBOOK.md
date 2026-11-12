@@ -1,59 +1,129 @@
 # SmartNet Production Runbook
 
-## Local development
+## 1. Development profile
 
-1. Copy the root `.env.example` to `backend/.env`.
-2. Keep `ENVIRONMENT=development`, `PAYMENT_DEMO_MODE=true` and
-   `MIKROTIK_DEMO_MODE=true` only for local development.
-3. Start the backend from the `backend` directory with
-   `uvicorn app:app --reload --port 8000`.
-4. Copy `frontend/.env.example` to `frontend/.env.local`, then run
-   `npm install` and `npm run dev` from `frontend`.
-5. Open `http://localhost:5173`. The first development administrator is created
-   from `DASHBOARD_USERNAME` and `DASHBOARD_PASSWORD` at backend startup. Change
-   this password after login using the sidebar password-change action.
-6. The optional Telegram bot runs from `backend` using
-   `python -m bot.main_bot`. It requires a bot token and a JSON list of numeric
-   administrator Telegram IDs.
+The local development profile uses SQLite and simulated MikroTik data. It is not production-ready and must never process real subscribers or live router operations.
 
-## Production
+- Copy `.env.example` to `backend/.env` for the local backend.
+- Use `ENVIRONMENT=development`, `DATABASE_BACKEND=sqlite`, `MIKROTIK_DEMO_MODE=true` and `PAYMENT_DEMO_MODE=true` only for local testing.
+- Start the API from `backend` using `uvicorn app:app --reload --port 8000`.
+- Start the UI from `frontend` using `npm install` and `npm run dev`.
+- Run backend unit tests and the Playwright customer lifecycle test before submitting changes.
 
-Production requires the operator to supply provider and infrastructure values;
-SmartNet does not invent payment endpoints, API keys or router credentials.
+## 2. MariaDB and Podman deployment
 
-Required environment values:
-- `ENVIRONMENT=production`
-- unique random `SECRET_KEY` and `PAYMENT_WEBHOOK_SECRET` (32+ characters each)
-- non-default `DASHBOARD_USERNAME` and strong unique `DASHBOARD_PASSWORD`
-- unique `POSTGRES_PASSWORD` with at least 16 characters
-- PostgreSQL `DATABASE_URL` using `postgresql+asyncpg://`
-- `PAYMENT_PROVIDER_MODE=manual` for administrator-verified wallet/bank transfers, or `PAYMENT_PROVIDER_MODE=gateway` plus actual `PAYMENT_CHECKOUT_URL` and a provider-specific signature-verification adapter
-- `PAYMENT_DEMO_MODE=false`
-- `MIKROTIK_DEMO_MODE=false`, real router host/user/password/port
-- exact HTTPS `CORS_ORIGINS`
-- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` for Compose
+The production target is MariaDB 11.4 + Podman Compose. Docker and PostgreSQL are not used by the supported deployment path.
 
-1. Copy root `.env.example` to `.env` and replace every example value.
-2. For manual wallet/bank transfer mode, use the private receipt review flow: an
-   administrator checks the actual account, records manual payment verification,
-   then approves the subscription. For gateway mode, configure a provider-specific
-   adapter. The generic callback is only an internal trusted callback boundary;
-   the adapter must validate the provider's signature, event uniqueness,
-   registration reference, settled amount and currency.
-3. Configure a least-privilege MikroTik API account and make the router reachable
-   only over a VPN/private network. Do not expose RouterOS API ports publicly.
-4. Review `SECURITY.md`, then deploy with `docker compose up -d --build`.
-5. Verify `/api/health/ready`, login, permissions, router commands, payment callbacks,
-   PDF storage and receipt privacy.
-6. Take a database and uploads backup, then perform a restore test before launch.
+1. Install Podman Desktop/Podman and a Compose provider. On Windows initialise and start the Podman machine. On Linux prefer rootless Podman.
+2. Copy root `.env.example` to root `.env`; replace every example secret.
+3. Set `ENVIRONMENT=production`, `DATABASE_BACKEND=mariadb`, `MARIADB_DATABASE`, `MARIADB_USER`, strong unique `MARIADB_PASSWORD` and `MARIADB_ROOT_PASSWORD`.
+4. Set unique 32+ character `SECRET_KEY` and `PAYMENT_WEBHOOK_SECRET`, unique dashboard login and password, exact HTTPS `CORS_ORIGINS`, and real domain / ACME email.
+5. Configure RouterOS production settings: `MIKROTIK_DEMO_MODE=false`, `MIKROTIK_USE_SSL=true`, `MIKROTIK_SSL_VERIFY=true`, `MIKROTIK_SSL_VERIFY_HOSTNAME=true`, the secure API-SSL port (normally 8729), router address, dedicated username and password.
+6. Set a payment mode. For now `PAYMENT_PROVIDER_MODE=manual` is the complete operational path. Do not choose gateway mode until its provider-specific adapter is implemented and accepted.
+7. Start services:
 
-## Important limitations
+```bash
+podman-compose -f podman-compose.yml up -d --build mariadb backend frontend
+```
 
-- The repository does not contain real payment-provider credentials or a provider-
-  specific signature-verification adapter. Payment cannot be declared production
-  ready until the selected provider is integrated and its sandbox/live flows pass.
-- Live MikroTik operations require a reachable configured router and profiles that
-  already exist on that router. Run a controlled acceptance test before serving users.
-- Telegram is optional and only starts when the operator supplies a token and IDs.
-- The initial Alembic baseline is intended for new databases. Existing PostgreSQL
-  installations must be backed up and reviewed before migration.
+8. Check `http://127.0.0.1:8080/api/health/ready` through the local frontend reverse proxy, API login, and backend readiness. For public HTTPS, point DNS to the host and enable Caddy:
+
+```bash
+podman-compose -f podman-compose.yml --profile edge up -d
+```
+
+9. Start Telegram only when the token and numeric admin allow-list have been configured:
+
+```bash
+podman-compose -f podman-compose.yml --profile telegram up -d telegram-bot
+```
+
+The database port is bound to loopback only. Do not change it to `0.0.0.0:3306`.
+
+## 3. MariaDB schema and backup/restore
+
+The backend Containerfile runs `alembic upgrade head` before Uvicorn. The first migration baseline was designed for a new SmartNet schema. For any existing installation, back up and review its schema/data before migration; do not apply a baseline blindly.
+
+Backup from a host with Bash and Podman Compose:
+
+```bash
+bash scripts/backup-smartnet.sh
+```
+
+This creates a MariaDB logical dump, a compressed archive of private uploads, and SHA-256 checksums. Copy the backup off-host and encrypt it.
+
+A restore overwrites database and uploads. Restore only into a verified recovery target after stopping user traffic:
+
+```bash
+RESTORE_CONFIRM=YES bash scripts/restore-smartnet.sh backups/smartnet-db-<UTC>.sql.gz backups/smartnet-uploads-<UTC>.tar.gz
+```
+
+Do not run restore against production as a routine test. Restore into a separate MariaDB instance first, then verify admin login, customer records, payment evidence, card batches, and PDF file access.
+
+## 4. MikroTik isolated acceptance
+
+Use a dedicated RouterOS test device or an isolated test VLAN/VPN, not the live customer router.
+
+- Install the RouterOS CA certificate into the SmartNet host trust store. The application validates the TLS chain and hostname; it does not silently disable certificate checks.
+- Create a dedicated RouterOS user with read policy for monitoring. Use a separate, narrowly scoped operator account for actions that must be approved.
+- Enable API-SSL and restrict the service source address to the SmartNet host/VPN.
+- Run the read-only preflight from backend:
+
+```bash
+cd backend
+python scripts/mikrotik_readonly_acceptance.py
+```
+
+- Verify system resource, Hotspot profiles and active sessions. The preflight does not create users, disconnect sessions, change profiles or reboot the router.
+- Test a controlled card creation and approved disconnect only after a human operator checks the target/profile and authorises a separate test window. Do not run destructive acceptance tests on a live subscriber network.
+
+The application has no RouterOS address or credentials supplied in this repository. A live acceptance result must be recorded by the operator after running against the dedicated test device.
+
+## 5. Manual payment operating procedure
+
+1. The customer creates a registration request and uploads a receipt image or provides the agreed transfer information.
+2. An operator independently checks the wallet/bank statement, exact amount, currency and unique transfer reference.
+3. In Admin > Payment requests, enter the verified amount, currency and external reference. SmartNet rejects a mismatch and duplicate reference and records the operator.
+4. A separate subscription approval activates the account.
+5. Review `GET /auth/payments/reconciliation` periodically and resolve all anomalies before closing the day's settlement.
+
+Receipt uploads never mark a registration as paid. Gateway mode remains unavailable for production until the provider adapter validates signature, event identity, settlement, amount and currency.
+
+## 6. Network monitoring and diagnostics agents
+
+Enable `NETWORK_MONITOR_ENABLED=true` only after the real read-only RouterOS account works. Tune the collection interval, CPU threshold, active-user threshold and alert cooldown. The agent records snapshots and threshold alerts only; it has no write functions.
+
+The Diagnostics Agent searches `backend/knowledge_base` and optionally asks the configured OpenAI model to explain the matched evidence. It must cite its local source and state when measurements are missing. It never executes RouterOS commands.
+
+Admin-only monitoring endpoints:
+- `GET /mikrotik/monitor/snapshots`
+- `GET /mikrotik/monitor/alerts`
+- `GET /api/metrics` (requires administrator authentication)
+
+Diagnostic endpoint:
+- `POST /mikrotik/diagnose`
+
+## 7. Network operation approval workflow
+
+`POST /mikrotik/reboot` and `POST /mikrotik/users/{name}/disconnect` now create pending requests; they do not immediately change the router.
+
+1. A customer or administrator submits an allow-listed operation request.
+2. An administrator reviews the target and impact, then approves or rejects.
+3. An administrator executes an approved request as a separate step.
+4. SmartNet records the requester, reviewer, executor, result and timestamps. Requests expire after 30 minutes.
+5. A reboot request cannot be approved by the same administrator who submitted it.
+
+Never allow free-text chat or an AI agent to bypass this workflow.
+
+## 8. Continuous monitoring and release gate
+
+- Keep `/api/health/ready` green and inspect MariaDB connectivity.
+- Configure Sentry DSN only through protected environment settings; do not send PII.
+- Restrict Prometheus metrics to administrators or an internal management network.
+- Review logs for repeated router failures, TLS errors, unexpected operation states, payment anomalies and backup failures.
+- Run `npm audit --audit-level=moderate`, `pip-audit -r backend/requirements.txt`, backend tests, Playwright E2E, Podman compose validation and MariaDB migration/restore smoke tests before deployment.
+- Complete a real-router acceptance test, manual wallet transfer test, backup restore test, HTTPS check and alert delivery test before onboarding users.
+
+## Remaining external dependencies
+
+No real MikroTik host/certificate/credentials, public DNS domain, payment-provider API credentials or Telegram bot token are present in the repository. The software paths and preflight checks can be prepared here, but live integrations cannot be truthfully marked successful until those external resources are supplied and tested.
