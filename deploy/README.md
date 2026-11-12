@@ -143,7 +143,13 @@ Windows: start MariaDB first. Then install and start the two WinSW services. The
 
 ## 7. Real MikroTik acceptance
 
-Set MIKROTIK_DEMO_MODE=false, supply the actual host, username and password, and route traffic over a private management network or VPN. Use a dedicated RouterOS account with only the permissions required. Keep the router API inaccessible from the public internet.
+Set MIKROTIK_DEMO_MODE=false and route traffic over a private management network or VPN. Keep RouterOS API 8728/8729 inaccessible from the public internet.
+
+Configure two separate RouterOS API accounts:
+- Operational account (MIKROTIK_USERNAME / MIKROTIK_PASSWORD): used only by administrator-approved commands such as HotSpot user create/disconnect and router reboot. Grant only the required RouterOS policies and validate them on a test router first.
+- Observer account (MIKROTIK_READONLY_USERNAME / MIKROTIK_READONLY_PASSWORD, optionally separate host/port): used by Network Observer and aggregate status endpoint. Assign RouterOS read and api policies only; do not grant write, policy, reboot, password or other administrative policies. The application refuses production configuration when observer username/password are reused from the operational account.
+
+Set MIKROTIK_READONLY_HOST only when the read-only account is exposed on a different management endpoint; otherwise it uses MIKROTIK_HOST. Both accounts must have distinct high-entropy passwords and be reachable only over VPN/private management network.
 
 First acceptance checks should be read-only:
 1. GET /api/health/ready
