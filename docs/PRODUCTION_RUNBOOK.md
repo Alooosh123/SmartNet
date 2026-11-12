@@ -55,10 +55,10 @@ This creates a MariaDB logical dump, a compressed archive of private uploads, an
 A restore overwrites database and uploads. Restore only into a verified recovery target after stopping user traffic:
 
 ```bash
-RESTORE_CONFIRM=YES bash scripts/restore-smartnet.sh backups/smartnet-db-<UTC>.sql.gz backups/smartnet-uploads-<UTC>.tar.gz
+RESTORE_CONFIRM=YES RESTORE_UPLOADS_CONFIRM=YES bash scripts/restore-smartnet.sh backups/smartnet-db-<UTC>.sql.gz backups/smartnet-uploads-<UTC>.tar.gz
 ```
 
-Do not run restore against production as a routine test. Restore into a separate MariaDB instance first, then verify admin login, customer records, payment evidence, card batches, and PDF file access.
+Do not run restore against production as a routine test. For a restore drill, leave `RESTORE_UPLOADS_CONFIRM` unset so files extract to a temporary directory, and use a separate MariaDB database. For an intentional in-place recovery, stop app traffic and explicitly set `RESTORE_UPLOADS_CONFIRM=YES`; this replaces the live uploads volume. Verify admin login, customer records, payment evidence, card batches, and PDF file access.
 
 ## 4. MikroTik isolated acceptance
 
