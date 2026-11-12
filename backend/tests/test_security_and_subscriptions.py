@@ -32,6 +32,7 @@ def _production_settings(**overrides):
         "MIKROTIK_PASSWORD": "router-strong-password",
         "MIKROTIK_READONLY_USERNAME": "smartnet-observer",
         "MIKROTIK_READONLY_PASSWORD": "observer-strong-password",
+        "NETWORK_OBSERVER_ENABLED": True,
         "DATABASE_URL": "mysql+asyncmy://smartnet_app:runtime-secret@127.0.0.1:3306/smartnet",
         "MIGRATION_DATABASE_URL": "mysql+asyncmy://smartnet_migrator:migration-secret@127.0.0.1:3306/smartnet",
         "PAYMENT_PROVIDER_MODE": "manual",
