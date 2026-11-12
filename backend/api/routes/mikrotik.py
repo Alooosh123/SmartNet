@@ -9,6 +9,7 @@ from sqlalchemy.future import select
 from api.dependencies import get_current_user, get_current_admin
 from database import database, models
 from services.mikrotik_service import mikrotik_service
+from services.mikrotik_readonly_service import mikrotik_readonly_service
 from services.network_diagnostic_agent import diagnose_latest_network
 from config.settings import settings
 
@@ -24,7 +25,7 @@ def _client_plan(user: dict) -> str:
 def get_router_status(current_user: dict = Depends(get_current_user)):
     """Authenticated users may view aggregate router status."""
     try:
-        return mikrotik_service.get_status()
+        return mikrotik_readonly_service.get_status()
     except Exception:
         raise HTTPException(status_code=503, detail="تعذر قراءة حالة الراوتر. تحقق من اتصال MikroTik.")
 
