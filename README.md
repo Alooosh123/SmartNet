@@ -104,6 +104,22 @@ podman-compose -f podman-compose.yml --profile edge up -d --build
 podman-compose -f podman-compose.yml --profile telegram up -d --build telegram-bot
 ```
 
+### Prometheus للمراقبة المستمرة (اختياري)
+
+يعمل Prometheus داخل شبكة Podman الخاصة، ولا يُنشر على الإنترنت. أضف قيمة عشوائية قوية إلى `METRICS_TOKEN` داخل `.env` (32 حرفاً على الأقل)، ثم أنشئ ملف الرمز المطابق دون إضافته إلى Git:
+
+```bash
+set -a
+. ./.env
+set +a
+install -d -m 700 secrets
+umask 077
+printf '%s' "$METRICS_TOKEN" > secrets/metrics-token
+podman-compose -f podman-compose.yml --profile monitoring up -d prometheus
+```
+
+واجهة Prometheus متاحة محلياً فقط على `http://127.0.0.1:9090`. نقطة `/api/metrics` في SmartNet تقبل هذا الرمز فقط، ولا تُعرَض عبر واجهة العميل أو Caddy.
+
 يمكن استخدام `podman compose` بدلاً من `podman-compose` عندما يكون Compose provider مضبوطاً في Podman Desktop. راجع `docs/PRODUCTION_RUNBOOK.md` قبل النشر.
 
 ## الدفع اليدوي والتسويات
@@ -123,7 +139,7 @@ podman-compose -f podman-compose.yml --profile telegram up -d --build telegram-b
 
 ## الاختبارات وموثوقية النشر
 
-GitHub Actions يشغّل فحوص Backend وواجهة React وPlaywright، بالإضافة إلى تدقيق الاعتماديات واختبارات MariaDB/Podman بعد تفعيلها. نتائج CI لا تحل محل اختبار القبول على راوتر حقيقي أو حساب دفع حي.
+GitHub Actions يشغّل فحوص Backend وواجهة React وPlaywright، بالإضافة إلى تدقيق الاعتماديات واختبارات MariaDB/Podman والنسخ الاحتياطي والاستعادة وجمع Prometheus للمقاييس. نتائج CI لا تحل محل اختبار القبول على راوتر حقيقي أو حساب دفع حي.
 
 ## وثائق إضافية
 
