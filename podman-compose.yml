@@ -71,7 +71,6 @@ services:
       - smartnet-internal
 
   caddy:
-    profiles: ["edge"]
     image: docker.io/library/caddy:2.10.2-alpine
     restart: unless-stopped
     environment:
@@ -94,7 +93,6 @@ services:
   prometheus:
     container_name: smartnet-prometheus
     image: docker.io/prom/prometheus:v3.13.5
-    profiles: ["monitoring"]
     # With rootless Podman, container UID 0 maps to the invoking host user,
     # allowing the read-only 0600 scrape-token bind mount without world-readable secrets.
     user: "0:0"
@@ -120,7 +118,6 @@ services:
     build:
       context: .
       dockerfile: backend/Containerfile
-    profiles: ["telegram"]
     restart: unless-stopped
     env_file:
       - .env
