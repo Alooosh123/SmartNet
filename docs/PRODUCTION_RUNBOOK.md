@@ -29,13 +29,13 @@ podman-compose -f podman-compose.yml up -d --build mariadb backend frontend
 8. Check `http://127.0.0.1:8080/api/health/ready` through the local frontend reverse proxy, API login, and backend readiness. For public HTTPS, point DNS to the host and enable Caddy:
 
 ```bash
-podman-compose -f podman-compose.yml --profile edge up -d
+podman-compose -f podman-compose.yml up -d caddy
 ```
 
 9. Start Telegram only when the token and numeric admin allow-list have been configured:
 
 ```bash
-podman-compose -f podman-compose.yml --profile telegram up -d telegram-bot
+podman-compose -f podman-compose.yml up -d telegram-bot
 ```
 
 The database port is bound to loopback only. Do not change it to `0.0.0.0:3306`.
@@ -122,7 +122,7 @@ printf '%s' "$METRICS_TOKEN" > secrets/metrics-token
 3. Start the optional internal Prometheus service:
 
 ```bash
-podman-compose -f podman-compose.yml --profile monitoring up -d prometheus
+podman-compose -f podman-compose.yml up -d prometheus
 ```
 
 4. Confirm `http://127.0.0.1:9090/-/ready` and check the `smartnet-backend` target. Prometheus port 9090 is loopback-only; do not publish it publicly or proxy it through Caddy.
