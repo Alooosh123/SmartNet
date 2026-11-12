@@ -17,7 +17,7 @@ async def test_network_observer_persists_aggregate_read_only_snapshot(monkeypatc
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
     monkeypatch.setattr(network_observer, "AsyncSessionLocal", session_factory)
-    monkeypatch.setattr(network_observer.mikrotik_service, "get_status", lambda: {
+    monkeypatch.setattr(network_observer.mikrotik_readonly_service, "get_status", lambda: {
         "board-name": "Test Router",
         "version": "7.20",
         "cpu-load": "91",
@@ -31,11 +31,9 @@ async def test_network_observer_persists_aggregate_read_only_snapshot(monkeypatc
     monkeypatch.setattr(settings, "NETWORK_ALERT_FREE_MEMORY_MB", 32)
     monkeypatch.setattr(settings, "NETWORK_OBSERVER_HISTORY_LIMIT", 25)
 
-    # Mutation methods must never be called by this observer.
-    monkeypatch.setattr(network_observer.mikrotik_service, "reboot_router",
-                        lambda: pytest.fail("observer attempted router reboot"))
-    monkeypatch.setattr(network_observer.mikrotik_service, "disconnect_user",
-                        lambda name: pytest.fail("observer attempted user disconnect"))
+    # Dedicated observer adapter exposes no RouterOS mutation methods.
+    assert not hasattr(network_observer.mikrotik_readonly_service, "reboot_router")
+    assert not hasattr(network_observer.mikrotik_readonly_service, "disconnect_user")
 
     snapshot = await network_observer.collect_network_observation()
     assert snapshot["status"] == "warning"
