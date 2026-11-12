@@ -102,10 +102,11 @@ class Settings(BaseSettings):
                 raise ValueError("MIGRATION_DATABASE_URL must include a MariaDB username, password, host and database.")
             if migration_url.username == database_url.username:
                 raise ValueError("Use a distinct MariaDB account for schema migrations.")
-            if self.PAYMENT_PROVIDER_MODE not in {"manual", "gateway"}:
-                raise ValueError("PAYMENT_PROVIDER_MODE must be 'manual' or 'gateway'.")
-            if self.PAYMENT_PROVIDER_MODE == "gateway" and not self.PAYMENT_CHECKOUT_URL:
-                raise ValueError("PAYMENT_CHECKOUT_URL is required when PAYMENT_PROVIDER_MODE=gateway.")
+            if self.PAYMENT_PROVIDER_MODE != "manual":
+                raise ValueError(
+                    "Only PAYMENT_PROVIDER_MODE=manual is permitted until a provider-specific "
+                    "signature, event-id, settlement, amount and currency adapter is implemented."
+                )
             if len(self.DASHBOARD_PASSWORD) < 12:
                 raise ValueError("DASHBOARD_PASSWORD must contain at least 12 characters in production.")
             if self.DASHBOARD_USERNAME.strip().lower() in {"admin", "administrator"}:
