@@ -11,6 +11,14 @@ from services.mikrotik_service import mikrotik_service
 
 logger = logging.getLogger(__name__)
 
+# Export the latest live network readings alongside FastAPI request metrics.
+from prometheus_client import Gauge
+
+network_status_gauge = Gauge("smartnet_network_status", "1=healthy, 0.5=warning, 0=unreachable")
+network_cpu_gauge = Gauge("smartnet_mikrotik_cpu_load_percent", "Latest MikroTik CPU load percent")
+network_free_memory_gauge = Gauge("smartnet_mikrotik_free_memory_bytes", "Latest MikroTik free memory in bytes")
+network_active_sessions_gauge = Gauge("smartnet_mikrotik_active_sessions", "Latest MikroTik active Hotspot sessions")
+
 
 def _int_or_none(value: Any):
     try:
