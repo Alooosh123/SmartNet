@@ -15,6 +15,8 @@ import httpx
 BASE_URL = os.environ.get("SMARTNET_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
 ADMIN_USERNAME = os.environ.get("DASHBOARD_USERNAME", "")
 ADMIN_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
+ALLOW_MUTATIONS = os.environ.get("SMARTNET_SMOKE_ALLOW_MUTATIONS") == "YES"
+CONFIRMED_TARGET = os.environ.get("SMARTNET_SMOKE_CONFIRM_TARGET") == "isolated-staging-or-ci"
 
 
 def require(condition: bool, message: str) -> None:
@@ -23,6 +25,12 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> None:
+    require(
+        ALLOW_MUTATIONS and CONFIRMED_TARGET,
+        "This test creates users, writes test payment records, and changes test operation state. "
+        "Set SMARTNET_SMOKE_ALLOW_MUTATIONS=YES and "
+        "SMARTNET_SMOKE_CONFIRM_TARGET=isolated-staging-or-ci only for an isolated disposable database.",
+    )
     require(ADMIN_USERNAME and ADMIN_PASSWORD, "DASHBOARD_USERNAME/PASSWORD must be supplied.")
     suffix = secrets.token_hex(5)
     username = f"mariadb-ci-{suffix}"
