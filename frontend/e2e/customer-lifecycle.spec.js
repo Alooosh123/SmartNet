@@ -41,7 +41,7 @@ test("customer registration -> manual review -> activation -> portal -> chat -> 
   await expect(requestRow).toBeVisible();
   await expect(requestRow.getByText("بانتظار الدفع")).toBeVisible();
 
-  adminPage.on("dialog", dialog => dialog.accept());
+  adminPage.on("dialog", dialog => dialog.type() === "prompt" ? dialog.accept("E2E-TRANSFER-" + username) : dialog.accept());
   await requestRow.getByRole("button", { name: "تأكيد وصول المبلغ" }).click();
   await expect(requestRow.getByRole("button", { name: "اعتماد الاشتراك" })).toBeVisible();
   await requestRow.getByRole("button", { name: "اعتماد الاشتراك" }).click();
