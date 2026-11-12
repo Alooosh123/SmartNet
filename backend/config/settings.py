@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     NETWORK_CPU_ALERT_THRESHOLD: int = 85
     NETWORK_ACTIVE_USERS_ALERT_THRESHOLD: int = 500
     NETWORK_ALERT_COOLDOWN_SECONDS: int = 900
+    NETWORK_SNAPSHOT_RETENTION_DAYS: int = Field(default=30, ge=7, le=365)
 
     METRICS_ENABLED: bool = True
     METRICS_TOKEN: str = ""
