@@ -282,6 +282,7 @@ async def register_user(payload: RegistrationCreate, db: AsyncSession = Depends(
         "registration_token": registration_token,
         "plan": plan_key,
         "price": plan_info["price"],
+        "currency": "USD",
         "plan_name": plan_info["name"],
         "message": (
             f"تم إنشاء طلب الاشتراك في باقة ({plan_info['name']} - ${plan_info['price']}). أكمل الدفع عبر البوابة المحددة."
@@ -315,6 +316,7 @@ async def list_registrations(db: AsyncSession = Depends(database.get_db), curren
             "username": reg.username,
             "plan": reg.plan or "monthly",
             "price": reg.price or 20,
+            "currency": reg.currency or "USD",
             "paid": reg.paid,
             "payment_ref": reg.payment_ref,
             "receipt_image": f"/auth/registrations/{reg.id}/receipt" if reg.receipt_image else None,
