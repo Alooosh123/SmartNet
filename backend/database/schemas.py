@@ -55,6 +55,7 @@ class RegistrationResponse(BaseModel):
     price: Optional[int] = 20
     paid: bool
     payment_ref: Optional[str] = None
+    currency: str = "USD"
     receipt_image: Optional[str] = None
     processed: bool
     payment_message: Optional[str] = None
@@ -129,3 +130,10 @@ class OwnerNotificationResponse(BaseModel):
     unpaid_count: int
     paid_pending_count: int
     recent_requests: List[RegistrationResponse]
+
+
+class ManualPaymentVerification(BaseModel):
+    amount: float
+    currency: str = "USD"
+    external_reference: str
+    notes: Optional[str] = None
