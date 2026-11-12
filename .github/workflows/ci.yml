@@ -146,8 +146,10 @@ jobs:
           MARIADB_ROOT_PASSWORD=SmartNet-CI-Root-password-2026!Safe
           MIKROTIK_DEMO_MODE=false
           MIKROTIK_HOST=127.0.0.1
-          MIKROTIK_USERNAME=smartnet-ci-monitor
-          MIKROTIK_PASSWORD=SmartNet-CI-Router-password-2026!
+          MIKROTIK_MONITOR_USERNAME=smartnet-ci-monitor
+          MIKROTIK_MONITOR_PASSWORD=SmartNet-CI-Monitor-password-2026!
+          MIKROTIK_OPERATOR_USERNAME=smartnet-ci-operator
+          MIKROTIK_OPERATOR_PASSWORD=SmartNet-CI-Operator-password-2026!
           MIKROTIK_PORT=8729
           MIKROTIK_USE_SSL=true
           MIKROTIK_SSL_VERIFY=true
