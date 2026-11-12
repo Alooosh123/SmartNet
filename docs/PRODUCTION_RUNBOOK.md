@@ -40,6 +40,24 @@ podman-compose -f podman-compose.yml up -d telegram-bot
 
 The database port is bound to loopback only. Do not change it to `0.0.0.0:3306`.
 
+### Isolated MariaDB API acceptance test
+
+After the stack reports ready, the repository includes a destructive-to-test-data smoke script that exercises admin login, customer registration, manual payment verification, separate activation, customer login, duplicate transfer-reference rejection, payment reconciliation, and a network-operation request/rejection against the actual MariaDB-backed API.
+
+Run it only against a disposable CI/staging database. It inserts test users and a synthetic payment verification; it does not contact a bank or wallet and it never executes a RouterOS command:
+
+```bash
+set -a
+source ./.env
+set +a
+SMARTNET_SMOKE_ALLOW_MUTATIONS=YES \
+SMARTNET_SMOKE_CONFIRM_TARGET=isolated-staging-or-ci \
+SMARTNET_BASE_URL=http://127.0.0.1:8080 \
+python scripts/mariadb_api_smoke.py
+```
+
+Never run this smoke script against production customer data. The explicit guard is intentional.
+
 ## 3. MariaDB schema and backup/restore
 
 The backend Containerfile runs `alembic upgrade head` before Uvicorn. The first migration baseline was designed for a new SmartNet schema. For any existing installation, back up and review its schema/data before migration; do not apply a baseline blindly.
