@@ -18,7 +18,7 @@ def upgrade() -> None:
         return
     columns = {column["name"] for column in inspector.get_columns("card_batches")}
     if "owner_username" not in columns:
-        op.add_column("card_batches", sa.Column("owner_username", sa.String(), nullable=True))
+        op.add_column("card_batches", sa.Column("owner_username", sa.String(length=255), nullable=True))
     indexes = {index["name"] for index in inspector.get_indexes("card_batches")}
     if "ix_card_batches_owner_username" not in indexes:
         op.create_index("ix_card_batches_owner_username", "card_batches", ["owner_username"], unique=False)
