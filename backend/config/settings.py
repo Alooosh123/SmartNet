@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     MIKROTIK_HOST: str = "192.168.88.1"
     MIKROTIK_USERNAME: str = "admin"
     MIKROTIK_PASSWORD: str = ""
+    MIKROTIK_READ_USERNAME: Optional[str] = None
+    MIKROTIK_READ_PASSWORD: Optional[str] = None
     MIKROTIK_PORT: int = 8728
     MIKROTIK_DEMO_MODE: bool = True
     MIKROTIK_USE_SSL: bool = False
@@ -88,6 +90,10 @@ class Settings(BaseSettings):
                 raise ValueError("MIKROTIK_DEMO_MODE must be false in production.")
             if not self.MIKROTIK_PASSWORD:
                 raise ValueError("MIKROTIK_PASSWORD is required in production.")
+            if not self.MIKROTIK_READ_USERNAME or not self.MIKROTIK_READ_PASSWORD:
+                raise ValueError("Dedicated read-only RouterOS credentials are required in production.")
+            if self.MIKROTIK_READ_USERNAME == self.MIKROTIK_USERNAME:
+                raise ValueError("The RouterOS observer account must be separate from the control account.")
             if not self.MIKROTIK_USE_SSL or self.MIKROTIK_PORT != 8729:
                 raise ValueError("Production MikroTik must use API-SSL on port 8729.")
             if not self.DATABASE_URL.startswith("mysql+asyncmy://"):
