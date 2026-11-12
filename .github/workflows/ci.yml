@@ -165,6 +165,7 @@ jobs:
           NETWORK_ACTIVE_USERS_ALERT_THRESHOLD=500
           NETWORK_ALERT_COOLDOWN_SECONDS=900
           METRICS_ENABLED=true
+          METRICS_TOKEN=SmartNet-CI-Metrics-token-2026-with-more-than-32-characters
           SENTRY_DSN=
           OTEL_EXPORTER_OTLP_ENDPOINT=
           CORS_ORIGINS=["https://smartnet.example"]
@@ -172,6 +173,9 @@ jobs:
           ACME_EMAIL=ci@example.invalid
           EOF
           chmod 600 .env
+          mkdir -p secrets
+          printf '%s' 'SmartNet-CI-Metrics-token-2026-with-more-than-32-characters' > secrets/metrics-token
+          chmod 600 secrets/metrics-token
       - name: Validate Podman Compose configuration
         run: podman-compose -f podman-compose.yml config
       - name: Start isolated MariaDB
@@ -235,6 +239,26 @@ jobs:
             sleep 3
           done
           podman-compose -f podman-compose.yml logs backend frontend mariadb
+          exit 1
+      - name: Start private Prometheus scraper
+        run: |
+          podman-compose -f podman-compose.yml --profile monitoring up -d prometheus
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:9090/-/ready; then
+              echo "Prometheus is ready."
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:9090/-/ready
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:9090/api/v1/targets | grep -q '"health":"up"'; then
+              echo "Prometheus is scraping SmartNet metrics."
+              exit 0
+            fi
+            sleep 2
+          done
+          podman-compose -f podman-compose.yml logs prometheus backend
           exit 1
       - name: Test backup and isolated restore
         run: |
