@@ -6,7 +6,7 @@ from config.settings import settings
 logger = logging.getLogger(__name__)
 
 
-def generate_reply(user: str, message: str, plan: str = "monthly") -> Dict[str, Any]:
+async def generate_reply(user: str, message: str, plan: str = "monthly") -> Dict[str, Any]:
     """Generate an AI or contextual reply to client inquiries based on their subscription tier."""
     api_key = settings.OPENAI_API_KEY or os.environ.get('OPENAI_API_KEY')
     msg_clean = message.strip()
@@ -41,29 +41,40 @@ def generate_reply(user: str, message: str, plan: str = "monthly") -> Dict[str, 
         
         return {'text': text, 'model': 'smartnet-assistant-v2', 'meta': {'plan': plan}}
 
-    # Call OpenAI if key is available
+    # Call OpenAI asynchronously when an API key is configured.
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-        response = client.chat.completions.create(
-            model='gpt-3.5-turbo',
-            messages=[
-                {
-                    'role': 'system',
-                    'content': f'أنت المساعد الذكي لنظام SmartNet لإدارة شبكات الإنترنت. العميل الحالي: {user}، باقة اشتراكه: {plan}. أجب بلباقة ولغة عربية واضحة ومختصرة ومفيدة مع مراعاة صلاحيات باقته.'
-                },
-                {'role': 'user', 'content': msg_clean}
-            ],
-            max_tokens=250,
-            temperature=0.6,
-        )
-        reply_content = response.choices[0].message.content.strip()
-        return {'text': reply_content, 'model': 'gpt-3.5-turbo', 'meta': {'id': response.id, 'plan': plan}}
-    except Exception as e:
-        logger.warning(f"OpenAI completion error: {e}")
-        return {
-            'text': f"مرحباً {user}، تم استلام استفسارك وسيتابع معك فريق الدعم قريباً.",
-            'model': 'fallback',
-            'meta': {'error': str(e)}
-        }
+        from openai import AsyncOpenAI
 
+        async with AsyncOpenAI(api_key=api_key) as client:
+            response = await client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            f"أنت المساعد الذكي لنظام SmartNet لإدارة شبكات الإنترنت. "
+                            f"العميل الحالي: {user}، باقة اشتراكه: {plan}. "
+                            "أجب بلباقة وبالعربية الواضحة والمختصرة. لا تدّعِ أنك نفذت "
+                            "عمليات على الراوتر أو الدفع ما لم تؤكدها الأنظمة."
+                        ),
+                    },
+                    {"role": "user", "content": msg_clean},
+                ],
+                max_tokens=250,
+                temperature=0.4,
+            )
+        reply_content = (response.choices[0].message.content or "").strip()
+        if not reply_content:
+            raise RuntimeError("The configured AI model returned an empty response.")
+        return {
+            "text": reply_content,
+            "model": settings.OPENAI_MODEL,
+            "meta": {"id": response.id, "plan": plan},
+        }
+    except Exception:
+        logger.exception("OpenAI assistant request failed")
+        return {
+            "text": f"مرحباً {user}، تعذر الوصول إلى المساعد الخارجي حالياً. تم استلام رسالتك ويمكنك متابعة الدعم الفني.",
+            "model": "fallback",
+            "meta": {"plan": plan},
+        }

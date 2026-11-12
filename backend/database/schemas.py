@@ -37,6 +37,11 @@ class AdminCreate(AdminBase):
     password: str
 
 
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class RegistrationCreate(BaseModel):
     username: str
     password: str

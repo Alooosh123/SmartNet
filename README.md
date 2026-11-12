@@ -1,241 +1,175 @@
 <div dir="rtl">
 
-# 🌐 SmartNet — نظام إدارة شبكة الهوت سبوت
+# SmartNet — نظام إدارة شبكات MikroTik وHotspot
 
-<div align="center">
+نظام لإدارة شبكات Hotspot من خلال واجهة عربية، وواجهة API، وبوت Telegram اختياري. يدعم إنشاء كروت المشتركين وملفات PDF، متابعة المستخدمين، إدارة الاشتراكات وطلباتها.
 
-![SmartNet](https://img.shields.io/badge/SmartNet-v1.0.0-00d4aa?style=for-the-badge)
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi)
-![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)
-![MikroTik](https://img.shields.io/badge/MikroTik-RouterOS-003366?style=for-the-badge)
+> **حالة المشروع:** تم استكمال بنية تشغيل وإدارة أولية على فرع `production-readiness`. التشغيل التجاري الفعلي يظل مشروطاً بإعداد بيانات مزود الدفع والراوتر الحقيقي وإجراء اختبارات القبول الموضحة في [دليل الإنتاج](docs/PRODUCTION_RUNBOOK.md).
 
-نظام متكامل لإدارة شبكات الهوت سبوت MikroTik مع بوت تيليجرام ولوحة تحكم عصرية
+## المكونات
 
-</div>
+- **Backend:** Python 3.11+ وFastAPI وSQLAlchemy async.
+- **Admin Web:** React 18 + Vite، واجهة عربية RTL.
+- **Database:** SQLite للتطوير المحلي، وPostgreSQL للإنتاج.
+- **MikroTik:** وضع تجريبي محلي أو اتصال RouterOS API حقيقي.
+- **Subscriptions:** تسجيل طلبات، رفع إيصال خاص، مراجعة واعتماد إداري.
+- **PDF:** إصدار أوراق كروت Hotspot.
+- **Telegram:** بوت إداري اختياري ومقيد بقائمة IDs.
+- **Operations:** Alembic migrations وDocker Compose وGitHub Actions.
 
----
+## التشغيل المحلي على Windows
 
-## 📋 نظرة عامة
+### 1. المتطلبات
 
-**SmartNet** منصة احترافية لإدارة شبكات الإنترنت اللاسلكي (Hotspot) تتضمن:
+- Python 3.11 أو أحدث.
+- Node.js 20 أو أحدث.
+- npm.
+- لا تحتاج إلى MikroTik أو بوابة دفع لتشغيل وضع التطوير التجريبي.
 
-- 🤖 **بوت تيليجرام** — توليد كروت الهوت سبوت، متابعة حالة الشبكة، إدارة المستخدمين
-- ⚙️ **API خلفي (FastAPI)** — واجهة برمجية كاملة تغذّي لوحة التحكم
-- 🖥️ **لوحة تحكم (React)** — داشبورد احترافي بتصميم عصري بالعربية
-- 📄 **توليد PDF** — كروت هوت سبوت جاهزة للطباعة
-- 🔒 **نظام صلاحيات** — JWT للوحة التحكم + قائمة مديرين للبوت
+### 2. إعداد Backend
 
----
+من مجلد المشروع:
 
-## 🏗️ هيكل المشروع
-
-```
-smartnet-project/
-├── backend/                    # الواجهة الخلفية (Python)
-│   ├── bot/                    # بوت تيليجرام
-│   │   ├── handlers/           # معالجات الأوامر
-│   │   ├── keyboards/          # الأزرار التفاعلية
-│   │   └── main_bot.py         # تشغيل البوت
-│   ├── api/                    # REST API
-│   │   ├── routes/             # مسارات الـ API
-│   │   └── controllers/        # المنطق البرمجي
-│   ├── services/               # الخدمات المشتركة
-│   │   ├── mikrotik_api.py     # التواصل مع الراوتر
-│   │   ├── pdf_generator.py    # توليد ملفات PDF
-│   │   └── auth_service.py     # التحقق والصلاحيات
-│   ├── config/
-│   │   └── settings.py         # إعدادات النظام
-│   ├── database/
-│   │   ├── models.py           # نماذج قاعدة البيانات
-│   │   └── db_core.py          # الاتصال بقاعدة البيانات
-│   ├── requirements.txt
-│   └── app.py                  # نقطة الانطلاق
-├── frontend/                   # لوحة التحكم (React + Vite)
-│   ├── src/
-│   │   ├── components/         # مكونات قابلة لإعادة الاستخدام
-│   │   ├── pages/              # صفحات لوحة التحكم
-│   │   ├── services/           # الاتصال بالـ API
-│   │   └── App.jsx
-│   └── package.json
-├── .env.example                # نموذج المتغيرات البيئية
-├── .gitignore
-└── README.md
-```
-
----
-
-## ⚡ المتطلبات
-
-| الأداة | الإصدار المطلوب |
-|--------|----------------|
-| Python | 3.11 أو أحدث |
-| Node.js | 18 أو أحدث |
-| npm | 9 أو أحدث |
-
----
-
-## 🚀 التشغيل السريع
-
-### 1. استنساخ المشروع
-
-```bash
-git clone https://github.com/your-username/smartnet.git
-cd smartnet
-```
-
-### 2. إعداد المتغيرات البيئية
-
-```bash
-cp .env.example .env
-# افتح .env وعدّل القيم المطلوبة
-```
-
-> **الحد الأدنى للتشغيل (وضع التجريب):**
-> - أضف توكن البوت في `TELEGRAM_BOT_TOKEN`
-> - أضف معرّف تيليجرام الخاص بك في `TELEGRAM_ADMIN_IDS`
-> - اتركه `MIKROTIK_DEMO_MODE=True` للبيانات الوهمية
-
-### 3. تشغيل الواجهة الخلفية
-
-```bash
+```powershell
 cd backend
-
-# إنشاء بيئة افتراضية وتثبيت المكتبات
-python -m venv venv
-venv\Scripts\activate          # Windows
-# source venv/bin/activate     # Linux/Mac
-
-pip install -r requirements.txt
-
-# تشغيل الخادم
-python app.py
+Copy-Item ..\.env.example .env
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements-dev.txt
+uvicorn app:app --reload --host 127.0.0.1 --port 8000
 ```
 
-سيعمل الخادم على: `http://localhost:8000`
-- وثائق API: `http://localhost:8000/docs`
+عند أول تشغيل ينشئ النظام حساب المدير الأول من `DASHBOARD_USERNAME` و`DASHBOARD_PASSWORD` الموجودين في ملف `backend/.env`. بعد الدخول غيّر كلمة المرور من زر «تغيير كلمة المرور» في القائمة الجانبية. مسار `/auth/change-password` يطلب كلمة المرور الحالية، وتُحفظ الجديدة مجزأة. لا تستخدم قيمة المثال في خادم عام.
 
-### 4. تشغيل البوت
+- API: `http://127.0.0.1:8000`
+- Swagger: `http://127.0.0.1:8000/docs`
+- Health: `http://127.0.0.1:8000/api/health`
+- Readiness: `http://127.0.0.1:8000/api/health/ready`
 
-```bash
-# في نافذة ترمينال جديدة (مع تفعيل البيئة الافتراضية)
-cd backend
-python -m bot.main_bot
-```
+### 3. إعداد الواجهة
 
-### 5. تشغيل لوحة التحكم
+افتح نافذة PowerShell أخرى:
 
-```bash
+```powershell
 cd frontend
+Copy-Item .env.example .env.local
 npm install
 npm run dev
 ```
 
-ستعمل لوحة التحكم على: `http://localhost:5173`
+افتح `http://localhost:5173`.
 
----
+تحتوي الواجهة على تسجيل دخول المدير، وإنشاء طلب اشتراك عميل، ولوحة معلومات الشبكة، وإدارة الراوتر والمستخدمين، وتوليد الكروت، وإدارة المشتركين، ومراجعة طلبات الدفع.
 
-## 🔑 بيانات الدخول الافتراضية
+### 4. الاختبارات
 
-| الحقل | القيمة |
-|-------|--------|
-| اسم المستخدم | `admin` |
-| كلمة المرور | `admin123` |
+من مجلد `backend` مع تفعيل البيئة الافتراضية:
 
-> ⚠️ **مهم:** غيّر كلمة المرور فور الدخول في بيئة الإنتاج!
+```powershell
+python -m compileall -q .
+python -m pytest -q
+```
 
-## 💳 دورة اشتراك المشتركين
+الاختبارات الآلية تستخدم SQLite داخل الذاكرة، ولا تتصل براوتر حقيقي ولا ترسل مدفوعات أو رسائل Telegram.
 
-يسجل العميل من رابط **إنشاء حساب مدفوع**، ثم يحصل على رابط الدفع من مزود الدفع عند ضبط المتغير:
+## إعداد MikroTik حقيقي
+
+في `backend/.env` غيّر القيم التالية بعد تجهيز الراوتر:
 
 ```env
-PAYMENT_CHECKOUT_URL=https://your-provider.example/checkout/{invoice_id}
-PAYMENT_WEBHOOK_SECRET=ضع-سر-webhook-قوي-هنا
+MIKROTIK_DEMO_MODE=false
+MIKROTIK_HOST=عنوان-الراوتر-الخاص
+MIKROTIK_USERNAME=حساب-api-مخصص
+MIKROTIK_PASSWORD=كلمة-مرور-قوية
+MIKROTIK_PORT=8728
 ```
 
-بعد نجاح الدفع يستدعي مزود الدفع المسار التالي مع رأس `X-Webhook-Secret`:
+أنشئ حساباً محدود الصلاحيات على RouterOS، واسمح بالوصول من خادم SmartNet فقط عبر VPN أو شبكة خاصة. لا تفتح منفذ RouterOS API على الإنترنت العام. يجب إنشاء Profiles المطلوبة مسبقاً على الراوتر؛ أسماء مثل `1 Day` و`1 Week` في الواجهة لا تنشئ Profiles تلقائياً.
 
-```text
-POST /auth/registrations/{registration_id}/confirm?payment_ref=TRANSACTION_ID
-```
+عند تفعيل الوضع الحقيقي لا يقوم النظام بعرض بيانات Demo عند فشل الاتصال؛ بل يعيد خطأ واضحاً حتى لا يتم الخلط بين بيانات وهمية وحالة الشبكة الحقيقية.
 
-تأكيد الدفع لا ينشئ حسابًا فعالًا تلقائيًا. يظهر الطلب للمدير بحالة **مدفوع بانتظار الموافقة**، وبعد الموافقة فقط يتم إنشاء `Client` كمشترك يستطيع تسجيل الدخول.
+## التسجيل والدفع والاشتراكات
 
----
+1. يسجل العميل من الواجهة العامة ويحصل على رقم طلب ورمز خاص لمتابعته.
+2. يستخدم العميل بوابة الدفع الفعلية أو يرفع صورة حوالة للمراجعة.
+3. صورة الحوالة لا تعتبر إثبات دفع ولا تفعّل الحساب تلقائياً.
+4. إشعار الدفع الموثوق يضع الطلب في حالة مدفوع بانتظار مراجعة الإدارة.
+5. المدير يتحقق من وصول المبلغ ثم يعتمد الطلب من لوحة الإدارة.
+6. لا يصبح الحساب فعالاً إلا بعد موافقة الإدارة.
 
-## 📱 أوامر البوت
+### تكامل الدفع
 
-| الأمر | الوصف |
-|-------|-------|
-| `/start` | بدء التشغيل وعرض القائمة الرئيسية |
-| `/generate` | توليد كروت هوت سبوت جديدة |
-| `/cards` | عرض آخر الدفعات المولّدة |
-| `/status` | حالة الراوتر والشبكة |
-| `/users` | المستخدمون النشطون |
-| `/stats` | إحصائيات عامة |
-| `/help` | قائمة الأوامر |
+اختر `PAYMENT_PROVIDER_MODE=manual` للتحويلات اليدوية عبر المحافظ أو الحساب البنكي، أو `PAYMENT_PROVIDER_MODE=gateway` عند بناء Adapter وربط بوابة دفع فعلية. في وضع manual يرفع العميل الإيصال، ثم يؤكد المدير وصول المبلغ من لوحة الإدارة، ثم يعتمد الاشتراك منفصلاً. في وضع gateway اضبط `PAYMENT_CHECKOUT_URL` وفق رابط مزود الدفع. نقطة `POST /auth/registrations/{id}/confirm` تستقبل إشعاراً موثوقاً عبر رأس `X-Webhook-Secret` ومعرف معاملة `payment_ref`.
 
----
+**مهم:** هذه النقطة العامة لا تتحقق بنفسها من توقيع مزود خارجي أو مبلغ التسوية أو العملة أو تكرار Event ID. يجب بناء Adapter خاص بمزود الدفع المختار ليتحقق من التوقيع والمبلغ والعملة ورقم الفاتورة وحالة التسوية قبل استدعاء نقطة التأكيد. لا تعتبر المشروع مربوطاً ببوابة دفع حقيقية قبل تنفيذ واختبار ذلك الـ Adapter.
 
-## 🌐 مسارات API الرئيسية
+في التطوير فقط، يمكن استخدام زر الدفع التجريبي؛ لكنه لا يعتمد الحساب، بل يتركه بانتظار موافقة المدير. الدفع التجريبي ممنوع في وضع الإنتاج.
 
-| المسار | الطريقة | الوصف |
-|--------|---------|-------|
-| `/api/health` | GET | فحص حالة الخادم |
-| `/api/auth/login` | POST | تسجيل الدخول |
-| `/api/stats/overview` | GET | الإحصائيات العامة |
-| `/api/cards` | GET | قائمة الدفعات |
-| `/api/cards/generate` | POST | توليد كروت جديدة |
-| `/api/cards/{id}/pdf` | GET | تنزيل PDF |
-| `/api/network/status` | GET | حالة الراوتر |
-| `/api/network/users` | GET | المستخدمون النشطون |
+## Telegram Bot (اختياري)
 
----
-
-## 🔧 الإعداد لبيئة الإنتاج
-
-### الانتقال لراوتر MikroTik حقيقي
+أضف إلى ملف `backend/.env`:
 
 ```env
-MIKROTIK_DEMO_MODE=False
-MIKROTIK_HOST=192.168.88.1
-MIKROTIK_USERNAME=admin
-MIKROTIK_PASSWORD=your-router-password
+TELEGRAM_BOT_TOKEN=توكن-البوت
+TELEGRAM_ADMIN_IDS=[123456789]
+BOT_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-> تأكد من تفعيل **RouterOS API** في الراوتر:
-> `IP → Services → API (port 8728)` → Enable
+شغّل من مجلد `backend`:
 
-### تغيير قاعدة البيانات إلى PostgreSQL
-
-```env
-DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/smartnet
+```powershell
+python -m bot.main_bot
 ```
 
-```bash
-pip install asyncpg
+الأوامر: `/start` و`/status` و`/users` و`/cards` و`/generate 20 1 Day` و`/stats`. البوت يرفض المستخدمين غير الموجودين في قائمة المديرين.
+
+## تشغيل Docker للإنتاج
+
+ملف `.env` في جذر المشروع يجب أن يحتوي على بيانات إنتاج حقيقية قبل تشغيل Compose. انسخ `.env.example` ثم اضبط:
+
+- `ENVIRONMENT=production`.
+- أسرار JWT وWebhook عشوائية منفصلة بطول 32 حرفاً أو أكثر.
+- اسم مدير غير افتراضي وكلمة مرور قوية وفريدة.
+- `POSTGRES_PASSWORD` فريد بطول 16 حرفاً على الأقل.
+- بيانات PostgreSQL، بما فيها `POSTGRES_PASSWORD`.
+- `PAYMENT_DEMO_MODE=false` و`MIKROTIK_DEMO_MODE=false`.
+- في وضع gateway فقط: `PAYMENT_CHECKOUT_URL` الفعلي؛ في وضع manual تُراجع الحوالات يدوياً من لوحة الإدارة.
+- `CORS_ORIGINS` كقائمة JSON لعناوين HTTPS الدقيقة.
+- بيانات الراوتر الفعلي.
+
+بعد استكمال القيم:
+
+```powershell
+docker compose up -d --build
+docker compose ps
+docker compose logs -f backend
 ```
 
----
+الواجهة متاحة افتراضياً على المنفذ 8080. ضع Reverse Proxy أمامها مع HTTPS وشهادة TLS. لتفعيل البوت الاختياري:
 
-## 🛡️ الأمان
+```powershell
+docker compose --profile telegram up -d --build
+```
 
-- ✅ JWT tokens للمصادقة
-- ✅ قائمة مديرين مقيّدة في البوت
-- ✅ تشفير كلمات المرور (bcrypt)
-- ✅ CORS محدود في الإنتاج
-- ✅ لا ترفع `.env` على GitHub أبداً!
+تشغيل الإنتاج يرفض تلقائياً الإعدادات التجريبية، والأسرار الافتراضية، وSQLite، وعناوين CORS غير HTTPS.
 
----
+## قاعدة البيانات والهجرات
 
-## 📄 الترخيص
+يستخدم Docker أمر `alembic upgrade head` قبل بدء Backend. قاعدة البيانات المحلية SQLite تُنشأ تلقائياً وتُجرى لها ترقية توافقية عند التشغيل.
 
-MIT License — للاستخدام الحر مع الإشارة للمصدر.
+الهجرة الأولى هي Baseline للمخطط الحالي. قبل استخدام Alembic على قاعدة بيانات PostgreSQL قديمة أو تحتوي بيانات، خذ نسخة احتياطية وراجع [دليل الإنتاج](docs/PRODUCTION_RUNBOOK.md)؛ لا تطبقها على قاعدة بيانات غير مفحوصة.
 
----
+## وثائق الأمان والتشغيل
 
-<div align="center">
-صُنع بـ ❤️ | SmartNet v1.0.0
-</div>
+- [SECURITY.md](SECURITY.md) — الأسرار، ملفات العملاء، الدفع، وحدود التكامل.
+- [docs/PRODUCTION_RUNBOOK.md](docs/PRODUCTION_RUNBOOK.md) — خطوات التشغيل والتهيئة.
+- [backend/tests/README.md](backend/tests/README.md) — تشغيل الاختبارات.
+
+**تنبيه بيانات:** سبق أن احتوى المستودع على قاعدة SQLite وملفات إيصالات وملفات تشغيل مولدة. حذفها من النسخة الحالية لا يمحوها من تاريخ Git أو النسخ المتفرعة. يجب تدوير أي أسرار أو بيانات اعتماد يحتمل أنها كُشفت، ومراجعة تنظيف تاريخ Git عند الحاجة.
+
+## الترخيص
+
+MIT — راجع ملف الترخيص إذا تم إضافته إلى التوزيعة.
 
 </div>

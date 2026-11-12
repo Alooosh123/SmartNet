@@ -6,8 +6,9 @@ from services.pdf_generator import generate_cards_pdf as generate_styled_pdf
 
 class PDFService:
     def __init__(self):
-        # Backend static directory
-        self.output_dir = Path(__file__).resolve().parent.parent / 'static' / 'pdfs'
+        # PDFs contain reusable hotspot credentials. Keep them in private uploads,
+        # never in the publicly mounted static directory.
+        self.output_dir = Path(__file__).resolve().parent.parent / 'uploads' / 'pdfs'
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def generate_cards_pdf(self, batch_id: int, cards: list, hide_password: bool = False, profile: str = "1day", card_image: str = None) -> str:

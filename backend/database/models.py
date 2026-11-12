@@ -15,6 +15,7 @@ class CardBatch(Base):
     id = Column(Integer, primary_key=True, index=True)
     profile = Column(String, nullable=False)
     count = Column(Integer, nullable=False)
+    owner_username = Column(String, nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     pdf_path = Column(String, nullable=True)
 
@@ -36,7 +37,8 @@ class RegistrationRequest(Base):
     plan = Column(String, default="monthly", nullable=True)  # 'monthly', 'semi_annual', 'annual'
     price = Column(Integer, default=20, nullable=True)       # 20, 60, 100
     paid = Column(Boolean, default=False)
-    payment_ref = Column(String, nullable=True)
+    payment_ref = Column(String, nullable=True, index=True)
+    registration_token_hash = Column(String, nullable=True)
     receipt_image = Column(String, nullable=True)
     processed = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

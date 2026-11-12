@@ -43,7 +43,11 @@ def parse_print_cards_command(message: str):
 async def create_print_batch(command: dict, current_user, db: AsyncSession):
     """Create the same card batch and PDF used by the cards page."""
     cards = mikrotik_service.generate_cards(command['count'], command['profile'], 6)
-    batch = models.CardBatch(profile=command['profile'], count=command['count'])
+    batch = models.CardBatch(
+        profile=command['profile'],
+        count=command['count'],
+        owner_username=current_user.get('username'),
+    )
     db.add(batch)
     await db.flush()
 
@@ -194,7 +198,7 @@ async def post_chat_message(
             result = {'model': 'smartnet-card-restricted'}
     else:
         from services.chat_service import generate_reply
-        result = generate_reply(username, message, plan=plan)
+        result = await generate_reply(username, message, plan=plan)
         reply_text = result.get('text', 'تم استلام الرسالة')
 
     bot = models.ChatMessage(username=username, sender='bot', message=reply_text)
