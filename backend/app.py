@@ -9,7 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.future import select
-from prometheus_fastapi_instrumentator import Instrumentator
+from fastapi.responses import Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from config.settings import settings
 from database.database import engine, Base, AsyncSessionLocal
@@ -112,7 +113,9 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Webhook-Secret", "X-Registration-Token"],
 )
 
-Instrumentator().instrument(app).expose(app, include_in_schema=False, endpoint="/metrics")
+@app.get("/metrics", include_in_schema=False)
+def metrics_endpoint():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 static_dir = Path(__file__).resolve().parent / "static"
 static_dir.mkdir(parents=True, exist_ok=True)
