@@ -104,7 +104,7 @@ def _approve_manually(client, admin_headers, registration):
         f"/auth/registrations/{registration['registration_id']}/verify-manual",
         headers=admin_headers,
         json={
-            "amount": 100 if registration["registration_id"] > 0 else 20,
+            "amount": registration["price"],
             "currency": "USD",
             "payment_method": "mobile_wallet",
             "reference": f"E2E-transfer-{registration['registration_id']}",
