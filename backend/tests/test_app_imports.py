@@ -1,7 +1,7 @@
 def test_fastapi_application_imports_and_exposes_core_routes():
     from app import app
 
-    paths = {route.path for route in app.routes}
+    paths = set(app.openapi()["paths"])
     assert "/" in paths
     assert "/api/health" in paths
     assert "/api/health/ready" in paths
