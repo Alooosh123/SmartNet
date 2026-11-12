@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Header, Query, Up
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.future import select
 
 from database import models, schemas, database
@@ -390,7 +391,11 @@ async def verify_manual_payment(
             "activation remains a separate approval."
         ),
     ))
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="مرجع الحوالة مستخدم في طلب آخر.")
     return {
         "ok": True,
         "paid": True,
