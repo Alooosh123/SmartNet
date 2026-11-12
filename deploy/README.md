@@ -66,7 +66,8 @@ python3.11 -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-chmod 600 .env
+sudo chown root:smartnet .env
+sudo chmod 640 .env
 alembic upgrade head
 ~~~
 
