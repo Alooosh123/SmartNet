@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, Integer, BigInteger, String(255), DateTime, Boolean, ForeignKey,
+    Column, Integer, BigInteger, String, DateTime, Boolean, ForeignKey,
     Numeric, JSON, Text, Index,
 )
 from sqlalchemy.orm import relationship
