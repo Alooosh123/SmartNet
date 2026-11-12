@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+from decimal import Decimal
+from pydantic import Field
 
 class Token(BaseModel):
     access_token: str
@@ -37,6 +39,11 @@ class AdminCreate(AdminBase):
     password: str
 
 
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class RegistrationCreate(BaseModel):
     username: str
     password: str
@@ -50,6 +57,7 @@ class RegistrationResponse(BaseModel):
     price: Optional[int] = 20
     paid: bool
     payment_ref: Optional[str] = None
+    currency: str = "USD"
     receipt_image: Optional[str] = None
     processed: bool
     payment_message: Optional[str] = None
@@ -66,7 +74,6 @@ class CardBatchResponse(BaseModel):
     profile: str
     count: int
     created_at: datetime
-    pdf_path: Optional[str]
     model_config = {"from_attributes": True}
 
 
@@ -125,3 +132,10 @@ class OwnerNotificationResponse(BaseModel):
     unpaid_count: int
     paid_pending_count: int
     recent_requests: List[RegistrationResponse]
+
+
+class ManualPaymentVerification(BaseModel):
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    external_reference: str = Field(min_length=5, max_length=160)
+    notes: Optional[str] = Field(default=None, max_length=500)

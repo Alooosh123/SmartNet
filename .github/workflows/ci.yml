@@ -1,0 +1,284 @@
+name: SmartNet CI
+
+on:
+  push:
+    branches: [main, production-readiness]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smartnet-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      ENVIRONMENT: development
+      DATABASE_URL: sqlite+aiosqlite:///./ci.db
+      PAYMENT_PROVIDER_MODE: manual
+      PAYMENT_DEMO_MODE: "true"
+      MIKROTIK_DEMO_MODE: "true"
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements-dev.txt
+      - name: Audit Python dependencies
+        run: pip-audit --strict -r requirements.txt
+      - name: Compile backend
+        run: python -m compileall -q .
+      - name: Run automated tests
+        run: pytest -q tests
+
+  browser-e2e:
+    runs-on: ubuntu-24.04
+    env:
+      CI: "true"
+      ENVIRONMENT: development
+      DATABASE_URL: sqlite+aiosqlite:///./ci-browser.db
+      PAYMENT_PROVIDER_MODE: manual
+      PAYMENT_DEMO_MODE: "false"
+      MIKROTIK_DEMO_MODE: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements-dev.txt
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium for Playwright
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run browser end-to-end journey
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: http://127.0.0.1:8000
+        run: npm run test:e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smartnet-playwright-report
+          path: frontend/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  frontend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package.json
+      - name: Install frontend dependencies
+        run: npm install --no-fund
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=moderate
+      - name: Build frontend
+        run: npm run build
+
+  mariadb-podman:
+    runs-on: ubuntu-24.04
+    env:
+      MARIADB_DATABASE: smartnet
+      MARIADB_USER: smartnet
+      MARIADB_PASSWORD: SmartNet-CI-MariaDB-password-2026!
+      MARIADB_ROOT_PASSWORD: SmartNet-CI-Root-password-2026!Safe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install Podman and Compose provider
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman podman-compose uidmap slirp4netns fuse-overlayfs
+          podman --version
+          podman-compose --version
+          podman info --format '{{.Host.Security.Rootless}}'
+      - name: Create isolated deployment environment
+        run: |
+          cat > .env <<'EOF'
+          ENVIRONMENT=production
+          LOG_LEVEL=INFO
+          SECRET_KEY=SmartNet-CI-JWT-signing-secret-2026-with-more-than-32-characters
+          PAYMENT_WEBHOOK_SECRET=SmartNet-CI-webhook-signing-secret-2026-with-more-than-32-characters
+          PAYMENT_PROVIDER_MODE=manual
+          PAYMENT_CHECKOUT_URL=
+          PAYMENT_DEMO_MODE=false
+          APP_PUBLIC_URL=https://smartnet.example
+          DASHBOARD_USERNAME=smartnet-ci-owner
+          DASHBOARD_PASSWORD=SmartNet-CI-Dashboard-password-2026!
+          DATABASE_BACKEND=mariadb
+          DATABASE_URL=
+          MARIADB_HOST=mariadb
+          MARIADB_PORT=3306
+          MARIADB_DATABASE=smartnet
+          MARIADB_USER=smartnet
+          MARIADB_PASSWORD=SmartNet-CI-MariaDB-password-2026!
+          MARIADB_ROOT_PASSWORD=SmartNet-CI-Root-password-2026!Safe
+          MIKROTIK_DEMO_MODE=false
+          MIKROTIK_HOST=127.0.0.1
+          MIKROTIK_MONITOR_USERNAME=smartnet-ci-monitor
+          MIKROTIK_MONITOR_PASSWORD=SmartNet-CI-Monitor-password-2026!
+          MIKROTIK_OPERATOR_USERNAME=smartnet-ci-operator
+          MIKROTIK_OPERATOR_PASSWORD=SmartNet-CI-Operator-password-2026!
+          MIKROTIK_PORT=8729
+          MIKROTIK_USE_SSL=true
+          MIKROTIK_SSL_VERIFY=true
+          MIKROTIK_SSL_VERIFY_HOSTNAME=true
+          OPENAI_API_KEY=
+          OPENAI_MODEL=gpt-4o-mini
+          TELEGRAM_BOT_TOKEN=
+          TELEGRAM_ADMIN_IDS=[]
+          BOT_API_BASE_URL=http://127.0.0.1:8000
+          NETWORK_MONITOR_ENABLED=false
+          NETWORK_MONITOR_INTERVAL_SECONDS=60
+          NETWORK_CPU_ALERT_THRESHOLD=85
+          NETWORK_ACTIVE_USERS_ALERT_THRESHOLD=500
+          NETWORK_ALERT_COOLDOWN_SECONDS=900
+          METRICS_ENABLED=true
+          METRICS_TOKEN=SmartNet-CI-Metrics-token-2026-with-more-than-32-characters
+          SENTRY_DSN=
+          OTEL_EXPORTER_OTLP_ENDPOINT=
+          CORS_ORIGINS=["https://smartnet.example"]
+          DOMAIN=smartnet.example
+          ACME_EMAIL=ci@example.invalid
+          EOF
+          chmod 600 .env
+          mkdir -p secrets
+          printf '%s' 'SmartNet-CI-Metrics-token-2026-with-more-than-32-characters' > secrets/metrics-token
+          chmod 600 secrets/metrics-token
+      - name: Validate Podman Compose configuration
+        run: podman-compose -f podman-compose.yml config
+      - name: Start isolated MariaDB
+        run: |
+          podman-compose -f podman-compose.yml up -d mariadb
+          for attempt in $(seq 1 60); do
+            if podman-compose -f podman-compose.yml exec -T mariadb mariadb-admin ping -h 127.0.0.1 -uroot -p"$MARIADB_ROOT_PASSWORD" --silent; then
+              echo "MariaDB is ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          podman-compose -f podman-compose.yml logs mariadb
+          exit 1
+      - name: Test MariaDB migrations
+        env:
+          ENVIRONMENT: development
+          DATABASE_BACKEND: mariadb
+          DATABASE_URL: ""
+          MARIADB_HOST: 127.0.0.1
+          MARIADB_PORT: "3307"
+          MARIADB_DATABASE: smartnet
+          MARIADB_USER: smartnet
+          MARIADB_PASSWORD: SmartNet-CI-MariaDB-password-2026!
+          MARIADB_ROOT_PASSWORD: SmartNet-CI-Root-password-2026!Safe
+          MIKROTIK_DEMO_MODE: "true"
+          PAYMENT_DEMO_MODE: "false"
+          PAYMENT_PROVIDER_MODE: manual
+          PYTHONPATH: backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements-dev.txt
+          cd backend
+          alembic upgrade head
+          alembic current
+          python - <<'PY'
+          import asyncio
+          from sqlalchemy import text
+          from database.database import engine
+          async def main():
+              async with engine.connect() as connection:
+                  result = await connection.execute(text("SELECT VERSION()"))
+                  version = result.scalar_one()
+                  assert "MariaDB" in version, version
+                  tables = await connection.execute(text("SHOW TABLES"))
+                  names = {row[0] for row in tables.fetchall()}
+                  required = {"admins", "registration_requests", "payment_verifications", "network_snapshots", "network_alerts", "network_operations"}
+                  assert required.issubset(names), required - names
+                  print("MariaDB migration smoke passed:", version, sorted(required))
+              await engine.dispose()
+          asyncio.run(main())
+          PY
+      - name: Build and start SmartNet containers
+        run: |
+          # Keep the MariaDB named volume but replace the temporary container
+          # created for migration smoke testing before the full stack is started.
+          podman rm -f smartnet-mariadb
+          podman-compose -f podman-compose.yml up -d --build mariadb backend frontend
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8080/api/health/ready; then
+              echo "SmartNet readiness endpoint passed."
+              exit 0
+            fi
+            sleep 3
+          done
+          podman-compose -f podman-compose.yml logs backend frontend mariadb
+          exit 1
+      - name: Start private Prometheus scraper
+        run: |
+          podman-compose -f podman-compose.yml up -d prometheus
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:9090/-/ready; then
+              echo "Prometheus is ready."
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:9090/-/ready
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:9090/api/v1/targets | grep -q '"health":"up"'; then
+              echo "Prometheus is scraping SmartNet metrics."
+              exit 0
+            fi
+            sleep 2
+          done
+          podman-compose -f podman-compose.yml logs prometheus backend
+          exit 1
+      - name: Test backup and isolated restore
+        run: |
+          bash -n scripts/backup-smartnet.sh scripts/restore-smartnet.sh
+          bash scripts/backup-smartnet.sh "$RUNNER_TEMP/smartnet-backups"
+          BACKUP_DB="$(find "$RUNNER_TEMP/smartnet-backups" -name 'smartnet-db-*.sql.gz' -print -quit)"
+          BACKUP_UPLOADS="$(find "$RUNNER_TEMP/smartnet-backups" -name 'smartnet-uploads-*.tar.gz' -print -quit)"
+          test -s "$BACKUP_DB"
+          test -s "$BACKUP_UPLOADS"
+          gzip -t "$BACKUP_DB"
+          tar -tzf "$BACKUP_UPLOADS" >/dev/null
+          podman-compose -f podman-compose.yml exec -T mariadb mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" -e "CREATE DATABASE smartnet_restore_test; GRANT ALL PRIVILEGES ON smartnet_restore_test.* TO '$MARIADB_USER'@'%'; FLUSH PRIVILEGES;"
+          RESTORE_CONFIRM=YES RESTORE_DATABASE=smartnet_restore_test bash scripts/restore-smartnet.sh "$BACKUP_DB" "$BACKUP_UPLOADS"
+          podman-compose -f podman-compose.yml exec -T mariadb mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" smartnet_restore_test -e "SHOW TABLES;"
+      - name: Collect Podman diagnostics
+        if: always()
+        run: |
+          podman-compose -f podman-compose.yml ps || true
+          podman-compose -f podman-compose.yml logs || true
+          podman-compose -f podman-compose.yml down -v || true

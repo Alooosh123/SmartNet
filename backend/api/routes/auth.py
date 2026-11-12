@@ -1,11 +1,19 @@
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Optional
 from pathlib import Path
 import uuid
+import hashlib
+import hmac
+import secrets
+from io import BytesIO
+from PIL import Image
 from fastapi import APIRouter, Depends, HTTPException, status, Header, Query, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func
 
 from database import models, schemas, database
 from services.auth_service import auth_service
@@ -13,6 +21,16 @@ from config.settings import settings
 from database.schemas import RegistrationCreate
 from api.dependencies import get_current_admin, get_current_user
 from services.subscription_agent import PLANS, is_bot_enabled, set_bot_enabled, process_pending_registrations
+
+def _registration_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _require_registration_token(registration: models.RegistrationRequest, token: Optional[str]) -> None:
+    stored = getattr(registration, "registration_token_hash", None)
+    if not token or not stored or not hmac.compare_digest(_registration_token_hash(token), stored):
+        raise HTTPException(status_code=401, detail="رمز الوصول إلى طلب التسجيل غير صحيح")
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -48,25 +66,9 @@ async def login_for_access_token(
             "can_reboot_network": True,
         }
 
-    # 2. Check fallback environment admin credentials
-    if username == settings.DASHBOARD_USERNAME and password == settings.DASHBOARD_PASSWORD:
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = auth_service.create_access_token(
-            data={"sub": username, "role": "admin"},
-            expires_delta=access_token_expires,
-        )
-        db.add(models.AuditLog(action="login", performed_by=username, details="Admin logged in via env credentials"))
-        await db.commit()
-        return {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "role": "admin",
-            "username": username,
-            "plan": "admin",
-            "can_reboot_network": True,
-        }
-
-    # 3. Check Client database table
+    # Bootstrap credentials are only used to create the initial DB admin at startup.
+    # They are deliberately not a parallel authentication path.
+    # 2. Check Client database table
     result = await db.execute(select(models.Client).where(models.Client.username == username))
     client = result.scalars().first()
     if client and auth_service.verify_password(password, client.hashed_password):
@@ -162,8 +164,42 @@ async def get_current_user_profile(
     )
 
 
+@router.post("/change-password")
+async def change_password(
+    payload: schemas.PasswordChange,
+    db: AsyncSession = Depends(database.get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Change the authenticated administrator or subscriber's password."""
+    user_obj = current_user.get("obj")
+    if user_obj is None:
+        raise HTTPException(status_code=401, detail="الحساب غير متاح")
+
+    if not auth_service.verify_password(payload.current_password, user_obj.hashed_password):
+        raise HTTPException(status_code=400, detail="كلمة المرور الحالية غير صحيحة")
+
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=400, detail="اختر كلمة مرور جديدة مختلفة")
+
+    try:
+        user_obj.hashed_password = auth_service.get_password_hash(payload.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    db.add(models.AuditLog(
+        action="change_password",
+        performed_by=current_user.get("username", "user"),
+        details=f"Password changed for {current_user.get('role', 'user')} account",
+    ))
+    await db.commit()
+    return {"ok": True, "message": "تم تغيير كلمة المرور بنجاح. سجّل الدخول مجدداً."}
+
+
 @router.post("/setup")
 async def setup_initial_admin(admin_in: schemas.AdminCreate, db: AsyncSession = Depends(database.get_db)):
+    # Production administrator bootstrap is performed from protected environment variables.
+    if settings.ENVIRONMENT.lower() == "production":
+        raise HTTPException(status_code=404, detail="المسار غير متاح في بيئة الإنتاج")
     result = await db.execute(select(models.Admin).limit(1))
     if result.scalars().first():
         raise HTTPException(status_code=400, detail="Admin already exists. Setup complete.")
@@ -176,14 +212,61 @@ async def setup_initial_admin(admin_in: schemas.AdminCreate, db: AsyncSession = 
     return {"msg": "Admin created successfully."}
 
 
+@router.get("/admins", response_model=list[schemas.AdminResponse])
+async def list_administrators(
+    db: AsyncSession = Depends(database.get_db),
+    current_admin=Depends(get_current_admin),
+):
+    result = await db.execute(select(models.Admin).order_by(models.Admin.id.asc()))
+    return result.scalars().all()
+
+
+@router.post("/admins", response_model=schemas.AdminResponse)
+async def create_administrator(
+    payload: schemas.AdminCreate,
+    db: AsyncSession = Depends(database.get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Provision a second named administrator for dual-control approvals."""
+    username = payload.username.strip()
+    if len(username) < 3:
+        raise HTTPException(status_code=400, detail="اسم المدير يجب أن يكون 3 أحرف على الأقل")
+    if len(payload.password) < 12:
+        raise HTTPException(status_code=400, detail="كلمة مرور المدير يجب أن تكون 12 حرفاً على الأقل")
+    existing_admin = await db.execute(select(models.Admin).where(models.Admin.username == username))
+    if existing_admin.scalars().first():
+        raise HTTPException(status_code=409, detail="اسم المدير مستخدم بالفعل")
+    existing_client = await db.execute(select(models.Client).where(models.Client.username == username))
+    if existing_client.scalars().first():
+        raise HTTPException(status_code=409, detail="اسم المستخدم مسجل كعميل")
+    pending = await db.execute(select(models.RegistrationRequest).where(models.RegistrationRequest.username == username))
+    if pending.scalars().first():
+        raise HTTPException(status_code=409, detail="يوجد طلب اشتراك بهذا الاسم")
+
+    administrator = models.Admin(
+        username=username,
+        hashed_password=auth_service.get_password_hash(payload.password),
+        is_active=True,
+    )
+    db.add(administrator)
+    db.add(models.AuditLog(
+        action="administrator_created",
+        performed_by=getattr(current_admin, "username", "admin"),
+        details=f"Created administrator account '{username}' for dual-control administration.",
+    ))
+    await db.commit()
+    await db.refresh(administrator)
+    return administrator
+
+
 @router.post('/register')
 async def register_user(payload: RegistrationCreate, db: AsyncSession = Depends(database.get_db)):
     """Save a registration request (pending) with chosen plan and return a payment URL."""
     username = payload.username.strip()
     if not username or len(username) < 3:
         raise HTTPException(status_code=400, detail="اسم المستخدم يجب أن يكون 3 أحرف على الأقل")
-    if not payload.password or len(payload.password) < 4:
-        raise HTTPException(status_code=400, detail="كلمة المرور يجب أن تكون 4 أحرف على الأقل")
+    if not payload.password or len(payload.password) < 10:
+        raise HTTPException(status_code=400, detail="كلمة المرور يجب أن تكون 10 أحرف على الأقل")
 
     # check existing admin
     result = await db.execute(select(models.Admin).where(models.Admin.username == username))
@@ -202,29 +285,32 @@ async def register_user(payload: RegistrationCreate, db: AsyncSession = Depends(
 
     plan_key = (payload.plan or "monthly").lower()
     if plan_key not in PLANS:
-        plan_key = "monthly"
+        raise HTTPException(status_code=400, detail="الباقة المحددة غير متاحة")
     plan_info = PLANS[plan_key]
 
     hashed = auth_service.get_password_hash(payload.password)
+    registration_token = secrets.token_urlsafe(32)
     reg = models.RegistrationRequest(
         username=username,
         hashed_password=hashed,
         plan=plan_key,
-        price=plan_info["price"]
+        price=plan_info["price"],
+        registration_token_hash=_registration_token_hash(registration_token),
     )
     db.add(reg)
     await db.flush()
 
-    invoice_id = f"inv-{reg.id}-{username}"
+    invoice_id = f"smartnet-{reg.id}-{uuid.uuid4().hex}"
     payment_url = None
-    if settings.PAYMENT_CHECKOUT_URL:
+    if settings.PAYMENT_PROVIDER_MODE == "gateway" and settings.PAYMENT_CHECKOUT_URL:
         payment_url = settings.PAYMENT_CHECKOUT_URL.format(
             invoice_id=invoice_id,
             registration_id=reg.id,
             username=username,
         )
-    elif settings.PAYMENT_DEMO_MODE:
-        payment_url = f"{settings.APP_PUBLIC_URL.rstrip('/')}/payment/{reg.id}"
+    # In local demo mode the customer uses the authenticated demo-pay endpoint.
+    # No fake checkout URL is returned because the repository does not bundle a
+    # simulated payment web page or a real payment provider.
 
     reg.payment_ref = invoice_id
     db.add(models.AuditLog(
@@ -238,14 +324,17 @@ async def register_user(payload: RegistrationCreate, db: AsyncSession = Depends(
     return {
         "payment_required": bool(payment_url),
         "payment_url": payment_url,
+        "payment_demo_available": bool(settings.PAYMENT_DEMO_MODE and settings.ENVIRONMENT.lower() != "production"),
         "registration_id": reg.id,
+        "registration_token": registration_token,
         "plan": plan_key,
         "price": plan_info["price"],
+        "currency": "USD",
         "plan_name": plan_info["name"],
         "message": (
-            f"تم إنشاء طلب الاشتراك في باقة ({plan_info['name']} - ${plan_info['price']}). يرجى إتمام الدفع للمصادقة وتفعيل الحساب."
+            f"تم إنشاء طلب الاشتراك في باقة ({plan_info['name']} - ${plan_info['price']}). أكمل الدفع عبر البوابة المحددة."
             if payment_url else
-            "تم إنشاء الطلب، بانتظار إعداد بوابة الدفع من المالك."
+            ("تم إنشاء الطلب. يمكنك إكمال الدفع التجريبي في بيئة التطوير." if settings.PAYMENT_DEMO_MODE and settings.ENVIRONMENT.lower() != "production" else "تم إنشاء الطلب. حوّل المبلغ عبر قناة الدفع المتفق عليها ثم ارفع صورة الحوالة لمراجعتها من الإدارة.")
         )
     }
 
@@ -274,14 +363,107 @@ async def list_registrations(db: AsyncSession = Depends(database.get_db), curren
             "username": reg.username,
             "plan": reg.plan or "monthly",
             "price": reg.price or 20,
+            "currency": reg.currency or "USD",
             "paid": reg.paid,
             "payment_ref": reg.payment_ref,
-            "receipt_image": reg.receipt_image,
+            "receipt_image": f"/auth/registrations/{reg.id}/receipt" if reg.receipt_image else None,
             "processed": reg.processed,
             "payment_message": payment_message,
             "created_at": reg.created_at,
         })
     return response
+
+
+@router.get('/payments/reconciliation')
+async def payment_reconciliation(
+    db: AsyncSession = Depends(database.get_db),
+    current_admin = Depends(get_current_admin),
+):
+    """Read-only exception report for manual-payment reconciliation."""
+    result = await db.execute(select(models.RegistrationRequest).order_by(models.RegistrationRequest.id.desc()))
+    registrations = result.scalars().all()
+    anomalies = []
+    for reg in registrations:
+        verification_result = await db.execute(select(models.PaymentVerification).where(models.PaymentVerification.registration_id == reg.id))
+        verification = verification_result.scalars().first()
+        if reg.processed and not reg.paid:
+            anomalies.append({"registration_id": reg.id, "code": "activated_without_payment", "severity": "critical"})
+        if settings.PAYMENT_PROVIDER_MODE == "manual" and reg.paid and verification is None:
+            anomalies.append({"registration_id": reg.id, "code": "paid_without_manual_verification", "severity": "high"})
+        if verification is not None:
+            if verification.amount != Decimal(str(reg.price or 0)) or verification.currency != (reg.currency or "USD").upper():
+                anomalies.append({"registration_id": reg.id, "code": "payment_amount_or_currency_mismatch", "severity": "critical"})
+            if verification.external_reference != reg.payment_ref:
+                anomalies.append({"registration_id": reg.id, "code": "payment_reference_mismatch", "severity": "high"})
+    return {"mode": settings.PAYMENT_PROVIDER_MODE, "checked_registrations": len(registrations), "anomaly_count": len(anomalies), "anomalies": anomalies}
+
+@router.post('/registrations/{reg_id}/verify-manual')
+async def verify_manual_payment(
+    reg_id: int,
+    payload: schemas.ManualPaymentVerification,
+    db: AsyncSession = Depends(database.get_db),
+    current_admin = Depends(get_current_admin),
+):
+    """Record an administrator's manual confirmation of money received.
+
+    This is an auditable decision made only after checking the actual bank/mobile
+    wallet account outside SmartNet. It marks payment as verified but does not
+    activate the client; activation remains a separate approval action.
+    """
+    # Serialize verification for one registration so two operators cannot
+    # concurrently create two financial confirmations for the same request.
+    result = await db.execute(
+        select(models.RegistrationRequest)
+        .where(models.RegistrationRequest.id == reg_id)
+        .with_for_update()
+    )
+    reg = result.scalars().first()
+    if not reg:
+        raise HTTPException(status_code=404, detail="طلب التسجيل غير موجود")
+    if reg.processed:
+        raise HTTPException(status_code=409, detail="تم اعتماد هذا الطلب مسبقاً")
+    if reg.paid:
+        return {"ok": True, "paid": True, "processed": False, "detail": "الدفع مسجل كمدفوع مسبقاً"}
+
+    external_reference = payload.external_reference.strip()
+    currency = payload.currency.strip().upper()
+    expected_amount = Decimal(str(reg.price or 0))
+    if currency != (reg.currency or "USD").upper():
+        raise HTTPException(status_code=400, detail="عملة الحوالة لا تطابق عملة طلب الاشتراك")
+    if payload.amount != expected_amount:
+        raise HTTPException(status_code=400, detail="المبلغ المستلم لا يطابق قيمة الاشتراك")
+    if len(external_reference) < 5:
+        raise HTTPException(status_code=400, detail="مرجع الحوالة أو رقم العملية مطلوب")
+    duplicate = await db.execute(
+        select(models.PaymentVerification).where(models.PaymentVerification.external_reference == external_reference)
+    )
+    if duplicate.scalars().first():
+        raise HTTPException(status_code=409, detail="مرجع الحوالة مستخدم في عملية أخرى")
+
+    verifier = getattr(current_admin, "username", "admin")
+    db.add(models.PaymentVerification(
+        registration_id=reg.id,
+        amount=payload.amount,
+        currency=currency,
+        external_reference=external_reference,
+        verified_by=verifier,
+        notes=(payload.notes or "").strip() or None,
+    ))
+    reg.paid = True
+    reg.payment_ref = external_reference
+    db.add(models.AuditLog(
+        action="manual_payment_verified",
+        performed_by=verifier,
+        details=f"Verified registration #{reg.id}: {payload.amount} {currency}; ref={external_reference}",
+    ))
+    await db.commit()
+    return {
+        "ok": True,
+        "paid": True,
+        "processed": False,
+        "payment_reference": external_reference,
+        "message": "تم توثيق المبلغ ومرجع الحوالة. تفعيل الحساب ما زال يتطلب اعتماداً منفصلاً.",
+    }
 
 
 @router.post('/registrations/{reg_id}/approve')
@@ -292,7 +474,13 @@ async def approve_registration(
     current_admin = Depends(get_current_admin)
 ):
     """Approve a registration, create a client account with plan permissions and expiry."""
-    result = await db.execute(select(models.RegistrationRequest).where(models.RegistrationRequest.id == reg_id))
+    # Lock the registration while validating payment and creating the client.
+    # This prevents concurrent approval requests from renewing/creating twice.
+    result = await db.execute(
+        select(models.RegistrationRequest)
+        .where(models.RegistrationRequest.id == reg_id)
+        .with_for_update()
+    )
     reg = result.scalars().first()
     if not reg:
         raise HTTPException(status_code=404, detail="طلب التسجيل غير موجود")
@@ -300,6 +488,15 @@ async def approve_registration(
         raise HTTPException(status_code=400, detail="تمت معالجة هذا الطلب مسبقاً")
     if not reg.paid:
         raise HTTPException(status_code=400, detail="لا يمكن تفعيل المشترك قبل تأكيد الدفع")
+    if settings.PAYMENT_PROVIDER_MODE == "manual":
+        verification = await db.execute(
+            select(models.PaymentVerification).where(models.PaymentVerification.registration_id == reg.id)
+        )
+        verified_payment = verification.scalars().first()
+        if verified_payment is None:
+            raise HTTPException(status_code=409, detail="لا يمكن اعتماد طلب الدفع اليدوي دون سجل تحقق مالي موثق")
+        if verified_payment.amount != Decimal(str(reg.price or 0)) or verified_payment.currency != (reg.currency or "USD").upper():
+            raise HTTPException(status_code=409, detail="بيانات التحقق المالي لا تطابق قيمة الاشتراك")
 
     plan_key = reg.plan or "monthly"
     plan_info = PLANS.get(plan_key, PLANS["monthly"])
@@ -348,97 +545,109 @@ async def approve_registration(
 
 
 @router.post('/registrations/{reg_id}/demo-pay')
-async def demo_pay_registration(reg_id: int, db: AsyncSession = Depends(database.get_db)):
-    """Complete a local demo payment; disabled automatically in production mode."""
-    if not settings.PAYMENT_DEMO_MODE:
+async def demo_pay_registration(
+    reg_id: int,
+    x_registration_token: Optional[str] = Header(None, alias="X-Registration-Token"),
+    db: AsyncSession = Depends(database.get_db),
+):
+    """Local-only demonstration payment; never activates an account by itself."""
+    if not settings.PAYMENT_DEMO_MODE or settings.ENVIRONMENT.lower() == "production":
         raise HTTPException(status_code=404, detail="الدفع التجريبي غير متاح")
 
     result = await db.execute(select(models.RegistrationRequest).where(models.RegistrationRequest.id == reg_id))
     reg = result.scalars().first()
     if not reg:
         raise HTTPException(status_code=404, detail="طلب التسجيل غير موجود")
+    _require_registration_token(reg, x_registration_token)
     if reg.processed:
-        raise HTTPException(status_code=400, detail="تم تفعيل هذا الطلب مسبقاً")
+        raise HTTPException(status_code=409, detail="تمت معالجة هذا الطلب مسبقاً")
 
     reg.paid = True
     reg.payment_ref = f"demo-{reg.id}"
     db.add(models.AuditLog(
         action="demo_payment_confirmed",
-        performed_by="demo-payment",
-        details=f"Demo payment confirmed for registration #{reg.id}; plan={reg.plan}",
+        performed_by=f"registration:{reg.id}",
+        details=f"Demo payment marked for registration #{reg.id}; admin approval still required",
     ))
     await db.commit()
-
-    bot_active = await is_bot_enabled(db)
-    if bot_active:
-        await process_pending_registrations(db, force_now=True)
-        await db.refresh(reg)
-
-    if reg.processed:
-        return {
-            "ok": True,
-            "paid": True,
-            "processed": True,
-            "message": "تم تأكيد الدفع وتفعيل حسابك تلقائياً بواسطة بوت المصادقة الذكي! يمكنك تسجيل الدخول الآن مباشرة.",
-        }
-
     return {
         "ok": True,
         "paid": True,
         "processed": False,
-        "message": "تم تأكيد الدفع التجريبي، والطلب بانتظار إتمام المصادقة أو موافقة مدير الشبكة.",
+        "message": "تم تسجيل الدفع التجريبي. الحساب لا يتفعّل إلا بعد موافقة المدير.",
     }
 
 
 @router.post('/registrations/{reg_id}/confirm')
 async def confirm_payment(
     reg_id: int,
-    days: int = 30,
-    payment_ref: Optional[str] = None,
-    secret: Optional[str] = Query(None),
+    payment_ref: str,
     x_webhook_secret: Optional[str] = Header(None, alias="X-Webhook-Secret"),
     db: AsyncSession = Depends(database.get_db),
 ):
-    """Secure payment confirmation webhook.
-    Requires PAYMENT_WEBHOOK_SECRET to prevent unauthorized free account activation.
+    """Accept a trusted provider callback and mark payment for administrator review.
+
+    The shared secret authenticates the callback channel. A production provider
+    adapter must additionally validate its signature, event ID, amount and currency
+    before calling this endpoint.
     """
-    provided_secret = secret or x_webhook_secret
-    if not provided_secret or provided_secret != settings.PAYMENT_WEBHOOK_SECRET:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="رمز أمان بوابة الدفع غير صحيح أو غير مصرح به"
-        )
+    if settings.PAYMENT_PROVIDER_MODE != "gateway":
+        raise HTTPException(status_code=404, detail="إشعارات بوابة الدفع الخارجية غير مفعلة في وضع الدفع اليدوي")
+    if not x_webhook_secret or not hmac.compare_digest(x_webhook_secret, settings.PAYMENT_WEBHOOK_SECRET):
+        raise HTTPException(status_code=401, detail="رمز أمان بوابة الدفع غير صحيح أو غير مصرح به")
+    if not payment_ref or not payment_ref.strip() or payment_ref.strip().lower().startswith("demo-"):
+        raise HTTPException(status_code=400, detail="يجب إرسال مرجع معاملة حقيقي من مزود الدفع")
 
-    if days < 1 or days > 3650:
-        raise HTTPException(status_code=400, detail="عدد الأيام يجب أن يكون بين 1 و 3650")
-
-    result = await db.execute(select(models.RegistrationRequest).where(models.RegistrationRequest.id == reg_id))
+    result = await db.execute(
+        select(models.RegistrationRequest).where(models.RegistrationRequest.id == reg_id)
+    )
     reg = result.scalars().first()
     if not reg:
         raise HTTPException(status_code=404, detail="طلب التسجيل غير موجود")
     if reg.processed:
-        return {"ok": False, "detail": "تمت معالجته مسبقاً"}
+        return {"ok": True, "paid": True, "processed": True, "detail": "تمت معالجة الطلب مسبقاً"}
+    duplicate = await db.execute(
+        select(models.RegistrationRequest).where(
+            models.RegistrationRequest.payment_ref == payment_ref.strip(),
+            models.RegistrationRequest.id != reg_id,
+        ).limit(1)
+    )
+    if duplicate.scalars().first():
+        raise HTTPException(status_code=409, detail="مرجع المعاملة مستخدم في طلب آخر")
+    if reg.paid:
+        if reg.payment_ref == payment_ref.strip():
+            return {"ok": True, "paid": True, "processed": False, "detail": "إشعار الدفع سبق استلامه"}
+        raise HTTPException(status_code=409, detail="تم تسجيل دفعة مختلفة لهذا الطلب؛ يلزم التحقق اليدوي")
 
     reg.paid = True
-    if payment_ref:
-        reg.payment_ref = payment_ref
-    db.add(models.AuditLog(action="webhook_payment_confirmed", performed_by="payment_gateway", details=f"Payment confirmed for registration #{reg_id}, awaiting admin approval, ref={payment_ref}"))
+    reg.payment_ref = payment_ref.strip()
+    db.add(models.AuditLog(
+        action="webhook_payment_confirmed",
+        performed_by="payment_gateway",
+        details=f"Trusted callback marked registration #{reg_id} paid; awaiting administrator review",
+    ))
     await db.commit()
     return {
         "ok": True,
         "username": reg.username,
         "paid": True,
         "processed": False,
-        "message": "تم تأكيد الدفع، والطلب بانتظار موافقة مدير الشبكة."
+        "message": "تم تسجيل إشعار الدفع، والطلب بانتظار مراجعة الإدارة قبل تفعيل الحساب.",
     }
 
 
 @router.get('/registrations/{reg_id}/status')
-async def registration_status(reg_id: int, db: AsyncSession = Depends(database.get_db)):
+async def registration_status(
+    reg_id: int,
+    x_registration_token: Optional[str] = Header(None, alias="X-Registration-Token"),
+    db: AsyncSession = Depends(database.get_db),
+):
     result = await db.execute(select(models.RegistrationRequest).where(models.RegistrationRequest.id == reg_id))
     reg = result.scalars().first()
     if not reg:
         raise HTTPException(status_code=404, detail="طلب التسجيل غير موجود")
+    _require_registration_token(reg, x_registration_token)
+
     message_result = await db.execute(
         select(models.ChatMessage)
         .where(
@@ -460,7 +669,7 @@ async def registration_status(reg_id: int, db: AsyncSession = Depends(database.g
         "paid": reg.paid,
         "processed": reg.processed,
         "payment_ref": reg.payment_ref,
-        "receipt_image": reg.receipt_image,
+        "receipt_uploaded": bool(reg.receipt_image),
         "payment_message": latest_message.message if latest_message else None,
     }
 
@@ -469,51 +678,74 @@ async def registration_status(reg_id: int, db: AsyncSession = Depends(database.g
 async def upload_registration_receipt(
     reg_id: int,
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(database.get_db)
+    x_registration_token: Optional[str] = Header(None, alias="X-Registration-Token"),
+    db: AsyncSession = Depends(database.get_db),
 ):
-    """Upload remittance / bank transfer voucher receipt image."""
+    """Store a private remittance image for manual review; never marks it paid."""
     result = await db.execute(select(models.RegistrationRequest).where(models.RegistrationRequest.id == reg_id))
     reg = result.scalars().first()
     if not reg:
         raise HTTPException(status_code=404, detail="طلب التسجيل غير موجود")
+    _require_registration_token(reg, x_registration_token)
+    if reg.paid or reg.processed:
+        raise HTTPException(status_code=409, detail="لا يمكن تعديل إيصال طلب تم تأكيد دفعه أو معالجته")
+
+    allowed_types = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="يسمح فقط بملفات JPG أو PNG أو WEBP")
+
+    contents = await file.read()
+    if not contents or len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="حجم الصورة يجب ألا يتجاوز 5 ميجابايت")
+    try:
+        image = Image.open(BytesIO(contents))
+        image.verify()
+        if image.format not in {"JPEG", "PNG", "WEBP"}:
+            raise ValueError("Unsupported image format")
+    except Exception:
+        raise HTTPException(status_code=400, detail="الملف المرفوع ليس صورة سليمة")
 
     receipts_dir = Path(__file__).resolve().parent.parent.parent / "uploads" / "receipts"
     receipts_dir.mkdir(parents=True, exist_ok=True)
-
-    ext = Path(file.filename or "receipt.jpg").suffix or ".jpg"
-    unique_filename = f"receipt_{reg.id}_{uuid.uuid4().hex[:8]}{ext}"
+    unique_filename = f"receipt_{reg.id}_{uuid.uuid4().hex[:12]}{allowed_types[file.content_type]}"
     target_path = receipts_dir / unique_filename
+    with open(target_path, "wb") as output:
+        output.write(contents)
 
-    contents = await file.read()
-    if len(contents) > 10 * 1024 * 1024:  # 10MB limit
-        raise HTTPException(status_code=400, detail="حجم الصورة كبير جداً (الحد الأقصى 10 ميجابايت)")
-
-    with open(target_path, "wb") as f:
-        f.write(contents)
-
-    rel_url = f"/uploads/receipts/{unique_filename}"
-    reg.receipt_image = rel_url
-
+    rel_path = f"uploads/receipts/{unique_filename}"
+    reg.receipt_image = rel_path
     db.add(models.AuditLog(
         action="receipt_uploaded",
-        performed_by=reg.username,
-        details=f"Remittance receipt uploaded for registration #{reg.id} ({unique_filename})"
+        performed_by=f"registration:{reg.id}",
+        details=f"Private remittance image uploaded for registration #{reg.id}",
     ))
     await db.commit()
-
-    # Trigger automatic smart authentication bot to verify receipt and activate account
-    bot_active = await is_bot_enabled(db)
-    if bot_active:
-        await process_pending_registrations(db, force_now=True)
-        await db.refresh(reg)
-
     return {
         "ok": True,
-        "receipt_url": rel_url,
-        "processed": reg.processed,
-        "paid": reg.paid,
-        "message": "تم استلام سند التحويل بنجاح وفحصه واعتماد اشتراكك بواسطة بوت المصادقة الذكي! يمكنك تسجيل الدخول الآن مباشرة." if reg.processed else "تم رفع صورة الحوالة بنجاح، بانتظار استكمال التدقيق والمصادقة."
+        "receipt_uploaded": True,
+        "processed": False,
+        "paid": False,
+        "message": "تم استلام صورة الحوالة. ستراجعها الإدارة، ولا يتم تفعيل الاشتراك اعتماداً على الصورة وحدها.",
     }
+
+
+@router.get('/registrations/{reg_id}/receipt')
+async def get_registration_receipt(
+    reg_id: int,
+    db: AsyncSession = Depends(database.get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Serve remittance images only to authenticated administrators."""
+    result = await db.execute(select(models.RegistrationRequest).where(models.RegistrationRequest.id == reg_id))
+    reg = result.scalars().first()
+    if not reg or not reg.receipt_image:
+        raise HTTPException(status_code=404, detail="إيصال الحوالة غير موجود")
+    backend_root = Path(__file__).resolve().parent.parent.parent
+    receipts_root = (backend_root / "uploads" / "receipts").resolve()
+    receipt_path = (backend_root / reg.receipt_image).resolve()
+    if receipts_root not in receipt_path.parents or not receipt_path.is_file():
+        raise HTTPException(status_code=404, detail="ملف الإيصال غير متاح")
+    return FileResponse(str(receipt_path), media_type="application/octet-stream", filename=receipt_path.name)
 
 
 @router.get('/clients', response_model=list[schemas.ClientResponse])
@@ -619,7 +851,7 @@ async def get_bot_status(
     db: AsyncSession = Depends(database.get_db),
     current_admin = Depends(get_current_admin)
 ):
-    """Get the current operational status of the subscription authentication bot."""
+    """Get the current status of the subscription notification agent."""
     enabled = await is_bot_enabled(db)
     count_res = await db.execute(
         select(models.AuditLog).where(models.AuditLog.action.in_(["bot_auth_approved", "subscription_agent_approved"]))
@@ -631,7 +863,7 @@ async def get_bot_status(
         "name": "بوت المصادقة الذكي SmartNet",
         "last_run": datetime.now(timezone.utc).isoformat(),
         "total_auto_approved": total_approved,
-        "mode": "فحص وتفعيل فوري للطلبات المسددة" if enabled else "إيقاف مؤقت",
+        "mode": "تنبيهات ومتابعة الطلبات؛ الاعتماد النهائي يدوي" if enabled else "إيقاف مؤقت",
     }
 
 
@@ -657,11 +889,11 @@ async def trigger_bot(
     db: AsyncSession = Depends(database.get_db),
     current_admin = Depends(get_current_admin)
 ):
-    """Trigger the authentication bot immediately on all pending paid requests."""
-    approved_count = await process_pending_registrations(db, force_now=True)
+    """Trigger a reminder/status scan; this action never approves payments or clients."""
+    await process_pending_registrations(db, force_now=True)
     return {
         "ok": True,
-        "approved_count": approved_count,
-        "message": f"قام بوت المصادقة بفحص الطلبات والمصادقة على {approved_count} طلب مسدد بنجاح!"
+        "notifications_checked": True,
+        "message": "اكتمل فحص الطلبات وإرسال التنبيهات. لا يتم تفعيل أي حساب تلقائياً؛ راجع الدفعات واعتمدها يدوياً بعد التحقق."
     }
 

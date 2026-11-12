@@ -1,241 +1,155 @@
 <div dir="rtl">
 
-# 🌐 SmartNet — نظام إدارة شبكة الهوت سبوت
+# SmartNet — نظام إدارة شبكة Hotspot
 
-<div align="center">
+منصة عربية لإدارة اشتراكات Hotspot وشبكات MikroTik، توليد كروت المستخدمين وملفات PDF، مراجعة الحوالات، ودعم العملاء. تتضمن API مبنياً بـFastAPI، ولوحة React، وبوت Telegram اختياري، ومساعد تشخيص يعتمد قاعدة معرفة تشغيلية موثوقة.
 
-![SmartNet](https://img.shields.io/badge/SmartNet-v1.0.0-00d4aa?style=for-the-badge)
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi)
-![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)
-![MikroTik](https://img.shields.io/badge/MikroTik-RouterOS-003366?style=for-the-badge)
+## المكونات
 
-نظام متكامل لإدارة شبكات الهوت سبوت MikroTik مع بوت تيليجرام ولوحة تحكم عصرية
+- **Backend:** Python 3.11+ وFastAPI وSQLAlchemy Async.
+- **Frontend:** React 18 وVite 8 بواجهة عربية RTL.
+- **Database:** MariaDB 11.4 LTS في الإنتاج؛ SQLite للتطوير والاختبارات المحلية فقط.
+- **Runtime:** Podman وPodman Compose باستخدام ملفات Containerfile.
+- **HTTPS:** Caddy كخدمة اختيارية تُشغّل بالاسم مباشرةً عبر Podman Compose.
+- **Router:** MikroTik RouterOS عبر API-SSL مع التحقق من الشهادة وحساب مراقبة للقراءة فقط وحساب تشغيل منفصل للكتابة.
+- **AI:** مساعد OpenAI اختياري، وكيل تشخيص يعتمد ملفات Knowledge Base داخل المستودع.
+- **Monitoring:** عامل مراقبة للقراءة فقط، وسجل snapshots وتنبيهات وPrometheus metrics.
 
-</div>
+## التشغيل المحلي للتطوير
 
----
+### Backend
 
-## 📋 نظرة عامة
+من مجلد المشروع:
 
-**SmartNet** منصة احترافية لإدارة شبكات الإنترنت اللاسلكي (Hotspot) تتضمن:
-
-- 🤖 **بوت تيليجرام** — توليد كروت الهوت سبوت، متابعة حالة الشبكة، إدارة المستخدمين
-- ⚙️ **API خلفي (FastAPI)** — واجهة برمجية كاملة تغذّي لوحة التحكم
-- 🖥️ **لوحة تحكم (React)** — داشبورد احترافي بتصميم عصري بالعربية
-- 📄 **توليد PDF** — كروت هوت سبوت جاهزة للطباعة
-- 🔒 **نظام صلاحيات** — JWT للوحة التحكم + قائمة مديرين للبوت
-
----
-
-## 🏗️ هيكل المشروع
-
-```
-smartnet-project/
-├── backend/                    # الواجهة الخلفية (Python)
-│   ├── bot/                    # بوت تيليجرام
-│   │   ├── handlers/           # معالجات الأوامر
-│   │   ├── keyboards/          # الأزرار التفاعلية
-│   │   └── main_bot.py         # تشغيل البوت
-│   ├── api/                    # REST API
-│   │   ├── routes/             # مسارات الـ API
-│   │   └── controllers/        # المنطق البرمجي
-│   ├── services/               # الخدمات المشتركة
-│   │   ├── mikrotik_api.py     # التواصل مع الراوتر
-│   │   ├── pdf_generator.py    # توليد ملفات PDF
-│   │   └── auth_service.py     # التحقق والصلاحيات
-│   ├── config/
-│   │   └── settings.py         # إعدادات النظام
-│   ├── database/
-│   │   ├── models.py           # نماذج قاعدة البيانات
-│   │   └── db_core.py          # الاتصال بقاعدة البيانات
-│   ├── requirements.txt
-│   └── app.py                  # نقطة الانطلاق
-├── frontend/                   # لوحة التحكم (React + Vite)
-│   ├── src/
-│   │   ├── components/         # مكونات قابلة لإعادة الاستخدام
-│   │   ├── pages/              # صفحات لوحة التحكم
-│   │   ├── services/           # الاتصال بالـ API
-│   │   └── App.jsx
-│   └── package.json
-├── .env.example                # نموذج المتغيرات البيئية
-├── .gitignore
-└── README.md
-```
-
----
-
-## ⚡ المتطلبات
-
-| الأداة | الإصدار المطلوب |
-|--------|----------------|
-| Python | 3.11 أو أحدث |
-| Node.js | 18 أو أحدث |
-| npm | 9 أو أحدث |
-
----
-
-## 🚀 التشغيل السريع
-
-### 1. استنساخ المشروع
-
-```bash
-git clone https://github.com/your-username/smartnet.git
-cd smartnet
-```
-
-### 2. إعداد المتغيرات البيئية
-
-```bash
-cp .env.example .env
-# افتح .env وعدّل القيم المطلوبة
-```
-
-> **الحد الأدنى للتشغيل (وضع التجريب):**
-> - أضف توكن البوت في `TELEGRAM_BOT_TOKEN`
-> - أضف معرّف تيليجرام الخاص بك في `TELEGRAM_ADMIN_IDS`
-> - اتركه `MIKROTIK_DEMO_MODE=True` للبيانات الوهمية
-
-### 3. تشغيل الواجهة الخلفية
-
-```bash
+```powershell
 cd backend
-
-# إنشاء بيئة افتراضية وتثبيت المكتبات
-python -m venv venv
-venv\Scripts\activate          # Windows
-# source venv/bin/activate     # Linux/Mac
-
-pip install -r requirements.txt
-
-# تشغيل الخادم
-python app.py
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements-dev.txt
+Copy-Item ..\.env.example .env
 ```
 
-سيعمل الخادم على: `http://localhost:8000`
-- وثائق API: `http://localhost:8000/docs`
+اترك الإعدادات المحلية على `ENVIRONMENT=development` و`DATABASE_BACKEND=sqlite` و`MIKROTIK_DEMO_MODE=true` أثناء التطوير فقط.
 
-### 4. تشغيل البوت
-
-```bash
-# في نافذة ترمينال جديدة (مع تفعيل البيئة الافتراضية)
-cd backend
-python -m bot.main_bot
+```powershell
+uvicorn app:app --reload --host 127.0.0.1 --port 8000
 ```
 
-### 5. تشغيل لوحة التحكم
+الوثائق: `http://127.0.0.1:8000/docs`
 
-```bash
+### Frontend
+
+في نافذة PowerShell أخرى:
+
+```powershell
 cd frontend
+Copy-Item .env.example .env.local
 npm install
 npm run dev
 ```
 
-ستعمل لوحة التحكم على: `http://localhost:5173`
+الواجهة: `http://localhost:5173`
 
----
+### الاختبارات المحلية
 
-## 🔑 بيانات الدخول الافتراضية
-
-| الحقل | القيمة |
-|-------|--------|
-| اسم المستخدم | `admin` |
-| كلمة المرور | `admin123` |
-
-> ⚠️ **مهم:** غيّر كلمة المرور فور الدخول في بيئة الإنتاج!
-
-## 💳 دورة اشتراك المشتركين
-
-يسجل العميل من رابط **إنشاء حساب مدفوع**، ثم يحصل على رابط الدفع من مزود الدفع عند ضبط المتغير:
-
-```env
-PAYMENT_CHECKOUT_URL=https://your-provider.example/checkout/{invoice_id}
-PAYMENT_WEBHOOK_SECRET=ضع-سر-webhook-قوي-هنا
+```powershell
+cd backend
+python -m pytest -q tests
 ```
 
-بعد نجاح الدفع يستدعي مزود الدفع المسار التالي مع رأس `X-Webhook-Secret`:
+ومن مجلد `frontend`:
 
-```text
-POST /auth/registrations/{registration_id}/confirm?payment_ref=TRANSACTION_ID
+```powershell
+npm run build
+npx playwright install chromium
+npm run test:e2e
 ```
 
-تأكيد الدفع لا ينشئ حسابًا فعالًا تلقائيًا. يظهر الطلب للمدير بحالة **مدفوع بانتظار الموافقة**، وبعد الموافقة فقط يتم إنشاء `Client` كمشترك يستطيع تسجيل الدخول.
+فحوص الاعتماديات:
 
----
-
-## 📱 أوامر البوت
-
-| الأمر | الوصف |
-|-------|-------|
-| `/start` | بدء التشغيل وعرض القائمة الرئيسية |
-| `/generate` | توليد كروت هوت سبوت جديدة |
-| `/cards` | عرض آخر الدفعات المولّدة |
-| `/status` | حالة الراوتر والشبكة |
-| `/users` | المستخدمون النشطون |
-| `/stats` | إحصائيات عامة |
-| `/help` | قائمة الأوامر |
-
----
-
-## 🌐 مسارات API الرئيسية
-
-| المسار | الطريقة | الوصف |
-|--------|---------|-------|
-| `/api/health` | GET | فحص حالة الخادم |
-| `/api/auth/login` | POST | تسجيل الدخول |
-| `/api/stats/overview` | GET | الإحصائيات العامة |
-| `/api/cards` | GET | قائمة الدفعات |
-| `/api/cards/generate` | POST | توليد كروت جديدة |
-| `/api/cards/{id}/pdf` | GET | تنزيل PDF |
-| `/api/network/status` | GET | حالة الراوتر |
-| `/api/network/users` | GET | المستخدمون النشطون |
-
----
-
-## 🔧 الإعداد لبيئة الإنتاج
-
-### الانتقال لراوتر MikroTik حقيقي
-
-```env
-MIKROTIK_DEMO_MODE=False
-MIKROTIK_HOST=192.168.88.1
-MIKROTIK_USERNAME=admin
-MIKROTIK_PASSWORD=your-router-password
+```powershell
+cd frontend
+npm audit --audit-level=moderate
+cd ..\backend
+pip-audit -r requirements.txt
 ```
 
-> تأكد من تفعيل **RouterOS API** في الراوتر:
-> `IP → Services → API (port 8728)` → Enable
+## تشغيل MariaDB وPodman
 
-### تغيير قاعدة البيانات إلى PostgreSQL
+SmartNet لا يعتمد Docker أو PostgreSQL. قاعدة البيانات الإنتاجية هي MariaDB، والحاويات تعمل بواسطة Podman.
 
-```env
-DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/smartnet
-```
+1. ثبّت Podman Desktop أو Podman CLI ووفّر Compose provider (مثل podman-compose). على Windows شغّل Podman Machine.
+2. انسخ `.env.example` إلى `.env` في جذر المشروع.
+3. غيّر جميع كلمات المرور والأسرار، واجعل `DATABASE_BACKEND=mariadb`، وأدخل قيم MariaDB، ومعلومات HTTPS والراوتر الحقيقية.
+4. لا تستخدم بيانات المثال أو إعدادات demo في الإنتاج.
+5. نفّذ فحص الإعدادات والأسرار قبل التشغيل:
 
 ```bash
-pip install asyncpg
+bash scripts/check-production-env.sh
 ```
 
----
+تشغيل قاعدة البيانات والواجهة الخلفية والواجهة على شبكة Podman:
 
-## 🛡️ الأمان
+```bash
+podman-compose -f podman-compose.yml up -d --build mariadb backend frontend
+```
 
-- ✅ JWT tokens للمصادقة
-- ✅ قائمة مديرين مقيّدة في البوت
-- ✅ تشفير كلمات المرور (bcrypt)
-- ✅ CORS محدود في الإنتاج
-- ✅ لا ترفع `.env` على GitHub أبداً!
+يُتاح الويب محلياً على `http://127.0.0.1:8080`، وتُربط MariaDB محلياً فقط على المنفذ `127.0.0.1:3307`. لا تُفتح قاعدة البيانات على الإنترنت. شغّل كل خدمة اختيارية بتحديد اسمها صراحةً في أمر `podman-compose`؛ لا يعتمد المشروع على Compose Profiles حتى يعمل مع podman-compose 1.0.6.
 
----
+لتفعيل HTTPS عبر Caddy بعد توجيه DNS للنطاق إلى الخادم وضبط `DOMAIN` و`ACME_EMAIL`:
 
-## 📄 الترخيص
+```bash
+podman-compose -f podman-compose.yml up -d caddy
+```
 
-MIT License — للاستخدام الحر مع الإشارة للمصدر.
+لبوت Telegram (اختياري):
 
----
+```bash
+podman-compose -f podman-compose.yml up -d --build telegram-bot
+```
 
-<div align="center">
-صُنع بـ ❤️ | SmartNet v1.0.0
-</div>
+### Prometheus للمراقبة المستمرة (اختياري)
+
+يعمل Prometheus داخل شبكة Podman الخاصة، ولا يُنشر على الإنترنت. أضف قيمة عشوائية قوية إلى `METRICS_TOKEN` داخل `.env` (32 حرفاً على الأقل)، ثم أنشئ ملف الرمز المطابق دون إضافته إلى Git:
+
+```bash
+set -a
+. ./.env
+set +a
+install -d -m 700 secrets
+umask 077
+printf '%s' "$METRICS_TOKEN" > secrets/metrics-token
+podman-compose -f podman-compose.yml up -d prometheus
+```
+
+واجهة Prometheus متاحة محلياً فقط على `http://127.0.0.1:9090`. نقطة `/api/metrics` في SmartNet تقبل هذا الرمز فقط، ولا تُعرَض عبر واجهة العميل أو Caddy.
+
+يمكن استخدام `podman compose` بدلاً من `podman-compose` عندما يكون Compose provider مضبوطاً في Podman Desktop. راجع `docs/PRODUCTION_RUNBOOK.md` قبل النشر.
+
+## الدفع اليدوي والتسويات
+
+وضع الدفع الافتراضي في الإنتاج هو `PAYMENT_PROVIDER_MODE=manual`. العميل ينشئ طلباً ويرفع صورة التحويل. يراجع المسؤول التحويل في محفظته أو حسابه الفعلي، ويدخل المبلغ والعملة ومرجع الحوالة. بعد التحقق المالي المنفصل، يعتمد المسؤول الاشتراك. الصورة وحدها لا تثبت الدفع ولا تنشط العميل.
+
+المسار `GET /auth/payments/reconciliation` يعرض حالات عدم الاتساق. لا يُعد Gateway mode تكاملاً فعلياً لمزود الدفع حتى يُضاف Adapter خاص بالمزود يتحقق من التوقيع ومرجع الحدث والمبلغ والعملة وفق وثائقه الرسمية.
+
+## وكلاء الذكاء الاصطناعي
+
+- **Network Monitor:** يقرأ حالة الراوتر وعدد الجلسات والأداء، ويحفظ snapshots والتنبيهات. لا يمتلك وظائف تعديل RouterOS.
+- **Diagnostics Agent:** يسترجع إرشادات من `backend/knowledge_base` ويضم إليها قياسات RouterOS الحية المجمّعة عبر حساب المراقبة فقط. لا ينفذ أوامر ولا يرسل بيانات تعريف المشتركين للنموذج.
+- **Customer Assistant:** يجيب عن الاشتراك والدعم، وتُحال أسئلة أعطال الشبكة إلى قاعدة المعرفة.
+- **Network Operations Approval:** طلب فصل مستخدم أو إعادة تشغيل الراوتر يُسجّل ويُراجع ويُنفّذ كخطوات منفصلة مع سجل تدقيق.
+
+تفعيل مراقبة الشبكة يتطلب إعداد `NETWORK_MONITOR_ENABLED=true` وتوصيل MikroTik حقيقي في شبكة إدارة خاصة.
+
+## الاختبارات وموثوقية النشر
+
+GitHub Actions يشغّل فحوص Backend وواجهة React وPlaywright، بالإضافة إلى تدقيق الاعتماديات واختبارات MariaDB/Podman والنسخ الاحتياطي والاستعادة وجمع Prometheus للمقاييس. نتائج CI لا تحل محل اختبار القبول على راوتر حقيقي أو حساب دفع حي.
+
+## وثائق إضافية
+
+- `SECURITY.md` — متطلبات الأمان وبوابات الإنتاج.
+- `docs/PRODUCTION_RUNBOOK.md` — خطوات النشر والنسخ الاحتياطي واختبار MikroTik.
+- `backend/knowledge_base/` — مصادر التشغيل والتشخيص.
 
 </div>

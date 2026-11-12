@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from pathlib import Path
 from typing import Optional
 import uuid
+from io import BytesIO
+from PIL import Image
 
 from api.dependencies import get_current_cards_user
 from database import models, schemas, database
@@ -36,29 +38,40 @@ async def upload_card_image(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_cards_user)
 ):
-    """Upload custom card logo/background image."""
-    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/jpg"]
+    """Upload validated image content for a custom card design."""
+    allowed_types = {
+        "image/jpeg": (".jpg", "JPEG"),
+        "image/jpg": (".jpg", "JPEG"),
+        "image/png": (".png", "PNG"),
+        "image/webp": (".webp", "WEBP"),
+    }
     if file.content_type not in allowed_types:
         raise HTTPException(status_code=400, detail="نوع الصورة غير مدعوم. يرجى رفع ملف JPG أو PNG أو WEBP.")
 
+    contents = await file.read()
+    if not contents or len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="حجم الصورة يجب ألا يتجاوز 5 ميجابايت")
+    expected_extension, expected_format = allowed_types[file.content_type]
+    try:
+        image = Image.open(BytesIO(contents))
+        image.verify()
+        if image.format != expected_format:
+            raise ValueError("Image format does not match declared content type")
+    except Exception:
+        raise HTTPException(status_code=400, detail="الملف المرفوع ليس صورة سليمة أو لا يطابق نوع المحتوى")
+
     cards_dir = Path(__file__).resolve().parent.parent.parent / "uploads" / "cards"
     cards_dir.mkdir(parents=True, exist_ok=True)
-
-    ext = Path(file.filename or "image.png").suffix or ".png"
-    unique_filename = f"card_{uuid.uuid4().hex[:10]}{ext}"
+    unique_filename = f"card_{uuid.uuid4().hex}{expected_extension}"
     target_path = cards_dir / unique_filename
 
-    contents = await file.read()
-    if len(contents) > 5 * 1024 * 1024:  # 5MB limit
-        raise HTTPException(status_code=400, detail="حجم الصورة كبير جداً (الحد الأقصى 5 ميجابايت)")
-
-    with open(target_path, "wb") as f:
-        f.write(contents)
+    with open(target_path, "wb") as output:
+        output.write(contents)
 
     return {
         "ok": True,
         "url": f"/uploads/cards/{unique_filename}",
-        "filename": unique_filename
+        "filename": unique_filename,
     }
 
 @router.post("/generate", response_model=schemas.CardBatchResponse)
@@ -81,7 +94,11 @@ async def generate_cards(
 
     try:
         cards = mikrotik_service.generate_cards(req.count, req.profile, req.length)
-        batch = models.CardBatch(profile=req.profile, count=req.count)
+        batch = models.CardBatch(
+            profile=req.profile,
+            count=req.count,
+            owner_username=current_user.get("username"),
+        )
         db.add(batch)
         await db.flush()
 
@@ -151,7 +168,11 @@ async def generate_custom_cards(
         mikrotik_service.add_custom_cards(cleaned_cards, req.profile)
 
         # Save batch
-        batch = models.CardBatch(profile=req.profile, count=len(cleaned_cards))
+        batch = models.CardBatch(
+            profile=req.profile,
+            count=len(cleaned_cards),
+            owner_username=current_user.get("username"),
+        )
         db.add(batch)
         await db.flush()
 
@@ -195,7 +216,10 @@ async def get_batches(
     current_user: dict = Depends(get_current_cards_user),
     db: AsyncSession = Depends(database.get_db)
 ):
-    result = await db.execute(select(models.CardBatch).order_by(models.CardBatch.id.desc()))
+    query = select(models.CardBatch)
+    if current_user.get("role") != "admin":
+        query = query.where(models.CardBatch.owner_username == current_user.get("username"))
+    result = await db.execute(query.order_by(models.CardBatch.id.desc()))
     return result.scalars().all()
 
 @router.get("/{batch_id}/pdf")
@@ -208,15 +232,21 @@ async def download_batch_pdf(
     batch = result.scalars().first()
     if batch is None or not batch.pdf_path:
         raise HTTPException(status_code=404, detail="ملف PDF غير موجود")
+    if (
+        current_user.get("role") != "admin"
+        and batch.owner_username != current_user.get("username")
+    ):
+        # Do not disclose whether another subscriber's batch exists.
+        raise HTTPException(status_code=404, detail="ملف PDF غير موجود")
 
+    private_pdf_root = (
+        Path(__file__).resolve().parent.parent.parent / "uploads" / "pdfs"
+    ).resolve()
     pdf_file = Path(batch.pdf_path).resolve()
-    if not pdf_file.exists():
-        # Fallback check relative to backend
-        alt_file = (Path(__file__).resolve().parent.parent.parent / batch.pdf_path).resolve()
-        if alt_file.exists():
-            pdf_file = alt_file
-        else:
-            raise HTTPException(status_code=404, detail="ملف PDF غير موجود على الخادم")
+    if private_pdf_root not in pdf_file.parents:
+        raise HTTPException(status_code=404, detail="ملف PDF غير موجود")
+    if not pdf_file.is_file():
+        raise HTTPException(status_code=404, detail="ملف PDF غير موجود على الخادم")
 
     if pdf_file.suffix.lower() != ".pdf":
         raise HTTPException(status_code=400, detail="نوع الملف غير صالح")

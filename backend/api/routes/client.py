@@ -43,7 +43,11 @@ def parse_print_cards_command(message: str):
 async def create_print_batch(command: dict, current_user, db: AsyncSession):
     """Create the same card batch and PDF used by the cards page."""
     cards = mikrotik_service.generate_cards(command['count'], command['profile'], 6)
-    batch = models.CardBatch(profile=command['profile'], count=command['count'])
+    batch = models.CardBatch(
+        profile=command['profile'],
+        count=command['count'],
+        owner_username=current_user.get('username'),
+    )
     db.add(batch)
     await db.flush()
 
@@ -82,9 +86,14 @@ async def post_chat_message(
     else:
         username = payload.get('username') or current_user.get("username")
 
-    message = payload.get('message', '').strip()
+    raw_message = payload.get('message', '')
+    if not isinstance(raw_message, str):
+        raise HTTPException(status_code=422, detail='حقل الرسالة يجب أن يكون نصاً')
+    message = raw_message.strip()
     if not message:
         raise HTTPException(status_code=400, detail='الرسالة لا يمكن أن تكون فارغة')
+    if len(message) > 1500:
+        raise HTTPException(status_code=400, detail='الحد الأقصى لطول الرسالة هو 1500 حرفاً')
 
     msg = models.ChatMessage(username=username, sender='client', message=message)
     db.add(msg)
@@ -147,54 +156,47 @@ async def post_chat_message(
 
     if is_reboot_cmd:
         if can_reboot:
-            try:
-                mikrotik_service.reboot_router()
-                reply_text = (
-                    "🔄 تم بنجاح إرسال أمر إعادة تشغيل شبكة الراوتر (Reboot) بناءً على صلاحيات اشتراكك السنوي (VIP)! "
-                    "سيتم الانتهاء من إعادة التشغيل وتحديث حالة الاتصال خلال دقيقة."
-                )
-                automation = {'action': 'reboot_network', 'status': 'success'}
-                result = {'model': 'smartnet-network-reboot-vip'}
-            except Exception as exc:
-                reply_text = f"تعذر تنفيذ أمر إعادة التشغيل: {exc}"
-                result = {'model': 'smartnet-reboot-error'}
+            reply_text = (
+                "إعادة تشغيل الراوتر تؤثر على جميع المشتركين، لذلك لا أنفذها من رسالة محادثة. "
+                "استخدم زر «إعادة تشغيل الشبكة» في صفحة حسابك، واقرأ رسالة التأكيد قبل المتابعة."
+            )
+            result = {"model": "smartnet-safe-action-guidance"}
         else:
             reply_text = (
-                "⚠️ عذراً، تنفيذ أمر إعادة تشغيل الشبكة عبر الشات بوت متاح حصرياً لمشتركي **الباقة السنوية ($100 - VIP)** أو إدارة النظام. "
-                f"باقتك الحالية هي ({plan}). يمكنك الترقية إلى الباقة السنوية للتمتع بهذه الميزة."
+                "صلاحية إعادة تشغيل الراوتر غير متاحة في باقتك الحالية. "
+                "يمكنك طلب تنفيذ العملية من إدارة الشبكة."
             )
-            result = {'model': 'smartnet-permission-denied'}
+            result = {"model": "smartnet-permission-denied"}
     elif raw_command:
         if role == "admin" or plan in ["semi_annual", "annual"]:
-            try:
-                batch = await create_print_batch(raw_command, current_user, db)
-                reply_text = (
-                    f"تم تجهيز {batch.count} كرت بصلاحية {batch.profile} بنجاح. "
-                    "سيبدأ تنزيل ملف PDF الآن، ويمكنك طباعته مباشرة."
-                )
-                automation = {
-                    'action': 'download_cards_pdf',
-                    'batch_id': batch.id,
-                    'download_url': f'/cards/{batch.id}/pdf',
-                    'count': batch.count,
-                    'profile': batch.profile,
-                }
-                result = {'model': 'smartnet-card-print'}
-            except HTTPException:
-                await db.rollback()
-                raise
-            except Exception as exc:
-                await db.rollback()
-                raise HTTPException(status_code=500, detail=f'تعذر تجهيز ملف الكروت: {exc}')
+            reply_text = (
+                "لإنشاء الكروت ومراجعة العدد والمدة قبل التنفيذ، افتح صفحة «كروت الهوت سبوت» "
+                "واستخدم نموذج إصدار دفعة جديدة. لن أنشئ حسابات على الراوتر بمجرد رسالة نصية."
+            )
+            result = {"model": "smartnet-safe-card-guidance"}
         else:
             reply_text = (
-                "⚠️ خاصية توليد وطباعة الكروت عبر الدردشة متاحة لمشتركي **الباقة النصف سنوية ($60)** و**الباقة السنوية ($100)**. "
-                "يرجى ترقية الباقة لاستخدام هذه الخاصية."
+                "توليد الكروت متاح للباقة النصف سنوية والسنوية أو مدير النظام. "
+                "يمكنك التواصل مع الإدارة للترقية."
             )
-            result = {'model': 'smartnet-card-restricted'}
+            result = {"model": "smartnet-card-restricted"}
     else:
-        from services.chat_service import generate_reply
-        result = generate_reply(username, message, plan=plan)
+        network_question = bool(re.search(
+            r"(?:شبك|راوتر|مايكروتك|هوتسبوت|hotspot|wifi|واي\s*فاي|بطء|بطيء|تقطيع|انقطاع|انترنت|إنترنت|dns|cpu|ذاكرة|اتصال)",
+            message,
+            re.IGNORECASE,
+        ))
+        if network_question:
+            from services.diagnostics_agent import diagnose
+            diagnosis = await diagnose(message)
+            result = {
+                "text": diagnosis["answer"],
+                "model": diagnosis["model"],
+                "meta": {"sources": diagnosis.get("sources", []), "actions_executed": []},
+            }
+        else:
+            from services.chat_service import generate_reply
+            result = await generate_reply(username, message, plan=plan)
         reply_text = result.get('text', 'تم استلام الرسالة')
 
     bot = models.ChatMessage(username=username, sender='bot', message=reply_text)

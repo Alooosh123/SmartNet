@@ -1,9 +1,11 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import InvalidTokenError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import Optional, Dict, Any
+from datetime import datetime, timezone
 
 from config.settings import settings
 from database.database import get_db
@@ -20,10 +22,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         username: str = payload.get("sub")
-        role: str = payload.get("role", "admin")
+        role: Optional[str] = payload.get("role")
         if username is None:
             raise credentials_exception
-    except JWTError:
+    except InvalidTokenError:
         raise credentials_exception
 
     if role == "admin":
@@ -31,15 +33,18 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
         admin = result.scalars().first()
         if admin and admin.is_active:
             return {"username": admin.username, "role": "admin", "id": admin.id, "obj": admin}
-        # Fallback to env admin if configured
-        if username == settings.DASHBOARD_USERNAME:
-            return {"username": username, "role": "admin", "id": 0, "obj": None}
         raise credentials_exception
 
     elif role == "client":
         result = await db.execute(select(models.Client).where(models.Client.username == username))
         client = result.scalars().first()
         if client and client.is_active:
+            expires = client.subscription_expires
+            if expires is not None:
+                if expires.tzinfo is None:
+                    expires = expires.replace(tzinfo=timezone.utc)
+                if expires <= datetime.now(timezone.utc):
+                    raise HTTPException(status_code=403, detail="انتهت فترة اشتراكك، يرجى التواصل مع الإدارة للتجديد")
             return {"username": client.username, "role": "client", "id": client.id, "obj": client}
         raise credentials_exception
 
