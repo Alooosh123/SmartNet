@@ -11,7 +11,7 @@
 - **Database:** MariaDB 11.4 LTS في الإنتاج؛ SQLite للتطوير والاختبارات المحلية فقط.
 - **Runtime:** Podman وPodman Compose باستخدام ملفات Containerfile.
 - **HTTPS:** Caddy (اختياري عبر profile باسم edge).
-- **Router:** MikroTik RouterOS عبر API-SSL مع التحقق من الشهادة.
+- **Router:** MikroTik RouterOS عبر API-SSL مع التحقق من الشهادة وحساب مراقبة للقراءة فقط وحساب تشغيل منفصل للكتابة.
 - **AI:** مساعد OpenAI اختياري، وكيل تشخيص يعتمد ملفات Knowledge Base داخل المستودع.
 - **Monitoring:** عامل مراقبة للقراءة فقط، وسجل snapshots وتنبيهات وPrometheus metrics.
 
