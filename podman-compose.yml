@@ -7,6 +7,8 @@ services:
       MARIADB_USER: ${MARIADB_USER:?Set MARIADB_USER in .env}
       MARIADB_PASSWORD: ${MARIADB_PASSWORD:?Set MARIADB_PASSWORD in .env}
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:3307:3306"
     volumes:
       - smartnet-mariadb:/var/lib/mysql
     healthcheck:
@@ -60,12 +62,13 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    expose:
-      - "80"
+    ports:
+      - "127.0.0.1:8080:80"
     networks:
       - smartnet-internal
 
   caddy:
+    profiles: ["edge"]
     image: docker.io/library/caddy:2.10.2-alpine
     restart: unless-stopped
     environment:
