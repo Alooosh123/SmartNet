@@ -1,0 +1,121 @@
+services:
+  mariadb:
+    image: docker.io/library/mariadb:11.4.13
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${MARIADB_DATABASE:?Set MARIADB_DATABASE in .env}
+      MARIADB_USER: ${MARIADB_USER:?Set MARIADB_USER in .env}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:?Set MARIADB_PASSWORD in .env}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in .env}
+    volumes:
+      - smartnet-mariadb:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - smartnet-internal
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Containerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      ENVIRONMENT: production
+      DATABASE_BACKEND: mariadb
+      DATABASE_URL: ""
+      MARIADB_HOST: mariadb
+      MARIADB_PORT: "3306"
+      PAYMENT_DEMO_MODE: "false"
+      MIKROTIK_DEMO_MODE: "false"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    volumes:
+      - smartnet-uploads:/app/backend/uploads
+      - smartnet-static:/app/backend/static
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 5
+      start_period: 60s
+    networks:
+      - smartnet-internal
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Containerfile
+      args:
+        VITE_API_BASE_URL: ""
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    expose:
+      - "80"
+    networks:
+      - smartnet-internal
+
+  caddy:
+    image: docker.io/library/caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      frontend:
+        condition: service_started
+    networks:
+      - smartnet-internal
+
+  telegram-bot:
+    build:
+      context: .
+      dockerfile: backend/Containerfile
+    profiles: ["telegram"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      ENVIRONMENT: production
+      DATABASE_BACKEND: mariadb
+      DATABASE_URL: ""
+      MARIADB_HOST: mariadb
+      MARIADB_PORT: "3306"
+      PAYMENT_DEMO_MODE: "false"
+      MIKROTIK_DEMO_MODE: "false"
+      BOT_API_BASE_URL: http://backend:8000
+    command: ["python", "-m", "bot.main_bot"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - smartnet-internal
+
+volumes:
+  smartnet-mariadb:
+  smartnet-uploads:
+  smartnet-static:
+  caddy-data:
+  caddy-config:
+
+networks:
+  smartnet-internal:
+    driver: bridge
