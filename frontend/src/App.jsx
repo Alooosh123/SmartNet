@@ -543,7 +543,7 @@ function App() {
             <div className="panel-head"><h3>آخر القراءات والتنبيهات</h3><span className="muted">{networkMetrics.length} قراءة</span></div>
             {networkMetrics.length ? <div className="table-wrap"><table><thead><tr><th>الوقت</th><th>الحالة</th><th>CPU</th><th>الذاكرة الحرة</th><th>الجلسات</th><th>التنبيهات</th></tr></thead><tbody>
               {networkMetrics.slice(0,30).map(item=><tr key={item.id}><td>{item.observed_at ? new Date(item.observed_at).toLocaleString("ar") : "—"}</td><td>{item.status}</td><td>{item.cpu_load ?? "—"}%</td><td>{item.free_memory_bytes ?? "—"}</td><td>{item.active_users_count ?? "—"}</td><td>{(item.alerts || []).join("، ") || "لا توجد"}</td></tr>)}
-            </tbody></table></div> : <Empty text="لا توجد قراءات بعد. استخدم زر جمع قراءة الآن."/ >}
+            </tbody></table></div> : <Empty text="لا توجد قراءات بعد. استخدم زر جمع قراءة الآن."/>}
           </div>
         </section>}
         {page==="diagnostics" && <section className="page-section">
