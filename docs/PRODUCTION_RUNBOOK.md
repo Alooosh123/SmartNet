@@ -18,7 +18,7 @@ The production target is MariaDB 11.4 + Podman Compose. Docker and PostgreSQL ar
 2. Copy root `.env.example` to root `.env`; replace every example secret.
 3. Set `ENVIRONMENT=production`, `DATABASE_BACKEND=mariadb`, `MARIADB_DATABASE`, `MARIADB_USER`, strong unique `MARIADB_PASSWORD` and `MARIADB_ROOT_PASSWORD`.
 4. Set unique 32+ character `SECRET_KEY` and `PAYMENT_WEBHOOK_SECRET`, unique dashboard login and password, exact HTTPS `CORS_ORIGINS`, and real domain / ACME email.
-5. Configure RouterOS production settings: `MIKROTIK_DEMO_MODE=false`, `MIKROTIK_USE_SSL=true`, `MIKROTIK_SSL_VERIFY=true`, `MIKROTIK_SSL_VERIFY_HOSTNAME=true`, the secure API-SSL port (normally 8729), router address, dedicated username and password.
+5. Configure RouterOS production settings: `MIKROTIK_DEMO_MODE=false`, `MIKROTIK_USE_SSL=true`, `MIKROTIK_SSL_VERIFY=true`, `MIKROTIK_SSL_VERIFY_HOSTNAME=true`, the secure API-SSL port (normally 8729), router address, a separate read-only monitor account (`MIKROTIK_MONITOR_USERNAME/PASSWORD`) and a separate write-capable operator account (`MIKROTIK_OPERATOR_USERNAME/PASSWORD`). Do not reuse the operator account in the monitoring worker.
 6. Set a payment mode. For now `PAYMENT_PROVIDER_MODE=manual` is the complete operational path. Do not choose gateway mode until its provider-specific adapter is implemented and accepted.
 7. Start services:
 
@@ -64,8 +64,8 @@ Do not run restore against production as a routine test. Restore into a separate
 
 Use a dedicated RouterOS test device or an isolated test VLAN/VPN, not the live customer router.
 
-- Install the RouterOS CA certificate into the SmartNet host trust store. The application validates the TLS chain and hostname; it does not silently disable certificate checks.
-- Create a dedicated RouterOS user with read policy for monitoring. Use a separate, narrowly scoped operator account for actions that must be approved.
+- Install the RouterOS CA certificate into the SmartNet host trust store. The application validates the TLS chain and hostname; it does not silently disable certificate checks. Store separate credentials for `MIKROTIK_MONITOR_*` and `MIKROTIK_OPERATOR_*` in the protected environment.
+- Create a dedicated RouterOS user with read-only policy for monitoring. Create a second, separately named operator account with only the policy rights needed for card creation, user disconnection and approved router operations. SmartNet will not use the operator account for telemetry reads.
 - Enable API-SSL and restrict the service source address to the SmartNet host/VPN.
 - Run the read-only preflight from backend:
 
