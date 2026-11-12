@@ -21,18 +21,22 @@ class MikroTikService:
             {"id": "*3", "name": "user_demo_3", "uptime": "25m 12s", "bytes-out": "1048576"},
         ]
 
-    def _get_api(self):
+    def _get_api(self, read_only: bool = False):
         if settings.MIKROTIK_DEMO_MODE:
             return None
         if not ROUTEROS_AVAILABLE:
             raise RuntimeError("routeros_api is not installed; real MikroTik mode is unavailable.")
-        if not settings.MIKROTIK_HOST or not settings.MIKROTIK_USERNAME or not settings.MIKROTIK_PASSWORD:
-            raise RuntimeError("MIKROTIK_HOST, MIKROTIK_USERNAME and MIKROTIK_PASSWORD must be configured.")
+        username = settings.MIKROTIK_USERNAME
+        password = settings.MIKROTIK_PASSWORD
+        if read_only:
+            username = settings.MIKROTIK_READ_USERNAME or username
+            password = settings.MIKROTIK_READ_PASSWORD or password
+        if not settings.MIKROTIK_HOST or not username or not password:
+            raise RuntimeError("MikroTik host and credentials for the selected access role must be configured.")
         return routeros_api.RouterOsApiPool(
-            settings.MIKROTIK_HOST, username=settings.MIKROTIK_USERNAME,
-            password=settings.MIKROTIK_PASSWORD, port=settings.MIKROTIK_PORT,
-            use_ssl=settings.MIKROTIK_USE_SSL, ssl_verify=settings.MIKROTIK_USE_SSL,
-            ssl_verify_hostname=settings.MIKROTIK_USE_SSL,
+            settings.MIKROTIK_HOST, username=username, password=password,
+            port=settings.MIKROTIK_PORT, use_ssl=settings.MIKROTIK_USE_SSL,
+            ssl_verify=settings.MIKROTIK_USE_SSL, ssl_verify_hostname=settings.MIKROTIK_USE_SSL,
             plaintext_login=not settings.MIKROTIK_USE_SSL,
         )
 
@@ -43,7 +47,7 @@ class MikroTikService:
                 "cpu-load": "14", "free-memory": "104857600",
                 "uptime": "2d 4h 15m", "total-memory": "268435456", "version": "7.15.2 (stable)",
             }
-        connection = self._get_api()
+        connection = self._get_api(read_only=True)
         try:
             result = connection.get_api().get_resource("/system/resource").get()
             return result[0] if result else {}
@@ -53,7 +57,7 @@ class MikroTikService:
     def get_active_users(self):
         if settings.MIKROTIK_DEMO_MODE:
             return list(self._demo_users)
-        connection = self._get_api()
+        connection = self._get_api(read_only=True)
         try:
             return connection.get_api().get_resource("/ip/hotspot/active").get()
         finally:
@@ -67,7 +71,7 @@ class MikroTikService:
                 "cpu_load": 14, "free_memory_bytes": 104857600,
                 "total_memory_bytes": 268435456, "active_users_count": len(self._demo_users),
             }
-        connection = self._get_api()
+        connection = self._get_api(read_only=True)
         try:
             api = connection.get_api()
             resources = api.get_resource("/system/resource").get()
