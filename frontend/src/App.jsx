@@ -538,6 +538,32 @@ function App() {
           <div className="panel"><div className="panel-head"><h3>الجلسات النشطة</h3><button className="icon-btn" onClick={loadAll}><RefreshCw size={17}/></button></div>
             {users.length ? <div className="table-wrap"><table><thead><tr><th>المستخدم</th><th>IP</th><th>MAC</th><th>مدة الاتصال</th><th>الإجراء</th></tr></thead><tbody>{users.map((u,i)=><tr key={u.id||u.username||i}><td className="mono">{u.user||u.name||u.username||"—"}</td><td className="mono">{u.address||u.ip||"—"}</td><td className="mono">{u["mac-address"]||u.mac||"—"}</td><td>{u.uptime||"—"}</td><td><button className="table-action danger" onClick={()=>action(()=>api(`/mikrotik/users/${encodeURIComponent(u.user||u.name||u.username)}/disconnect`,token,{method:"POST"}),"تم إرسال طلب فصل المستخدم.")}>فصل</button></td></tr>)}</tbody></table></div>:<Empty text="لا توجد جلسات أو تعذر جلب المستخدمين."/>}
           </div>
+
+          {isAdmin && <div className="panel">
+            <div className="panel-head"><h3>طلبات عمليات الشبكة وموافقاتها</h3><button className="icon-btn" onClick={loadAll}><RefreshCw size={17}/></button></div>
+            {networkActionRequests.filter(item=>item.status==="pending").length ? <div className="table-wrap"><table>
+              <thead><tr><th>العملية</th><th>الهدف</th><th>مقدم الطلب</th><th>التاريخ</th><th>المراجعة</th></tr></thead>
+              <tbody>{networkActionRequests.filter(item=>item.status==="pending").map(item=><tr key={item.id}>
+                <td>{item.action==="reboot_router"?"إعادة تشغيل الراوتر":"فصل مستخدم"}</td><td>{item.target||"—"}</td><td>{item.requested_by}</td>
+                <td>{item.requested_at?new Date(item.requested_at).toLocaleString("ar"):"—"}</td>
+                <td><div className="row-actions"><button className="approve-btn" onClick={()=>reviewNetworkRequest(item.id,true)}>اعتماد وتنفيذ</button><button className="table-action danger" onClick={()=>reviewNetworkRequest(item.id,false)}>رفض</button></div></td>
+              </tr>)}</tbody></table></div> : <Empty text="لا توجد طلبات شبكة بانتظار المراجعة."/>}
+          </div>}
+          {isAdmin && <div className="panel">
+            <div className="panel-head"><h3>المراقبة الذكية للراوتر</h3><button className="secondary" onClick={runNetworkDiagnostic}>تشخيص مشكلة</button></div>
+            {networkObservations.length ? <div className="table-wrap"><table>
+              <thead><tr><th>الحالة</th><th>وقت القراءة</th><th>CPU</th><th>الذاكرة الحرة MB</th><th>الجلسات</th><th>تحذير</th></tr></thead>
+              <tbody>{networkObservations.slice(0,10).map(item=><tr key={item.id}>
+                <td><span className={item.status==="healthy"?"status-pill good":"status-pill warn"}>{item.status}</span></td>
+                <td>{item.observed_at?new Date(item.observed_at).toLocaleString("ar"):"—"}</td>
+                <td>{item.cpu_load??"—"}</td><td>{item.free_memory_mb??"—"}</td><td>{item.active_users_count??"—"}</td><td>{item.warning||"—"}</td>
+              </tr>)}</tbody></table></div> : <Empty text="لم تُجمع أي قراءة بعد. تحقق من إعداد وكيل المراقبة واتصال الراوتر."/>}
+            {diagnosticResult && <div className="registration-info">
+              <b>نتيجة التشخيص — {diagnosticResult.model}</b><p>{diagnosticResult.diagnosis}</p>
+              <small className="muted">تقرير للقراءة فقط · {diagnosticResult.observation?.observed_at||"لا توجد قراءة مسجلة"}</small>
+              <ul>{(diagnosticResult.sources||[]).map(source=><li key={source}><a href={source} target="_blank" rel="noreferrer">{source}</a></li>)}</ul>
+            </div>}
+          </div>}
         </section>}
         {page==="cards" && <section className="page-section">
           <div className="section-intro"><div><h2>إصدار كروت Hotspot</h2><p className="muted">إنشاء حسابات على الراوتر وإنتاج ورقة PDF للطباعة.</p></div></div>
