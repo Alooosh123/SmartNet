@@ -101,3 +101,71 @@ jobs:
         run: npm audit --audit-level=moderate
       - name: Build frontend
         run: npm run build
+
+  mariadb-integration:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: ci-root-password
+          MARIADB_DATABASE: smartnet_ci
+          MARIADB_USER: smartnet_bootstrap
+          MARIADB_PASSWORD: ci-bootstrap-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install MariaDB client
+        run: sudo apt-get update && sudo apt-get install -y mariadb-client
+      - name: Install backend dependencies
+        working-directory: backend
+        run: python -m pip install -r requirements-dev.txt
+      - name: Create least-privilege database accounts
+        env:
+          MARIADB_ROOT_PASSWORD: ci-root-password
+        run: |
+          mariadb --host=127.0.0.1 --user=root --password="$MARIADB_ROOT_PASSWORD" <<'SQL'
+          CREATE USER 'smartnet_app'@'%' IDENTIFIED BY 'ci-runtime-password';
+          GRANT SELECT, INSERT, UPDATE, DELETE ON smartnet_ci.* TO 'smartnet_app'@'%';
+          CREATE USER 'smartnet_migrator'@'%' IDENTIFIED BY 'ci-migration-password';
+          GRANT ALL PRIVILEGES ON smartnet_ci.* TO 'smartnet_migrator'@'%';
+          CREATE USER 'smartnet_backup'@'%' IDENTIFIED BY 'ci-backup-password';
+          GRANT SELECT, SHOW VIEW, TRIGGER, EVENT ON smartnet_ci.* TO 'smartnet_backup'@'%';
+          FLUSH PRIVILEGES;
+          SQL
+      - name: Apply Alembic migrations against MariaDB 11.8
+        working-directory: backend
+        env:
+          ENVIRONMENT: development
+          DATABASE_URL: mysql+asyncmy://smartnet_app:ci-runtime-password@127.0.0.1:3306/smartnet_ci?charset=utf8mb4
+          MIGRATION_DATABASE_URL: mysql+asyncmy://smartnet_migrator:ci-migration-password@127.0.0.1:3306/smartnet_ci?charset=utf8mb4
+        run: alembic upgrade head
+      - name: Run backend lifecycle and authorization suite against MariaDB
+        working-directory: backend
+        env:
+          ENVIRONMENT: development
+          DATABASE_URL: mysql+asyncmy://smartnet_app:ci-runtime-password@127.0.0.1:3306/smartnet_ci?charset=utf8mb4
+          NETWORK_OBSERVER_ENABLED: "false"
+          PAYMENT_DEMO_MODE: "true"
+          MIKROTIK_DEMO_MODE: "true"
+          PYTHONPATH: .
+        run: pytest -q tests
+      - name: Test MariaDB backup and restore round-trip
+        env:
+          MARIADB_HOST: 127.0.0.1
+          MARIADB_PORT: "3306"
+          MARIADB_DATABASE: smartnet_ci
+          MARIADB_USER: smartnet_backup
+          MARIADB_PASSWORD: ci-backup-password
+        run: bash deploy/scripts/test-mariadb-backup-restore.sh
