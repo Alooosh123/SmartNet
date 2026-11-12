@@ -22,7 +22,7 @@ port=$MARIADB_PORT
 protocol=tcp
 default-character-set=utf8mb4
 EOF
-mariadb-dump --defaults-extra-file="$credentials" --single-transaction --quick --routines --triggers --events --hex-blob --add-drop-table "$MARIADB_DATABASE" | gzip -9 > "$destination.tmp"
+mariadb-dump --defaults-extra-file="$credentials" --single-transaction --quick --triggers --hex-blob --add-drop-table "$MARIADB_DATABASE" | gzip -9 > "$destination.tmp"
 mv "$destination.tmp" "$destination"
 sha256sum "$destination" > "$destination.sha256"
 chmod 600 "$destination" "$destination.sha256"
