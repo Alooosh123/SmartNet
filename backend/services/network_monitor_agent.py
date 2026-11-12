@@ -44,8 +44,10 @@ async def _raise_alert(session, code: str, severity: str, message: str) -> None:
 
 async def collect_network_snapshot(session) -> models.NetworkSnapshot:
     """Collect a single read-only RouterOS observation and evaluate safe thresholds."""
-    status = mikrotik_service.get_status()
-    active_users = mikrotik_service.get_active_users()
+    status, active_users = await asyncio.gather(
+        asyncio.to_thread(mikrotik_service.get_status),
+        asyncio.to_thread(mikrotik_service.get_active_users),
+    )
     cpu = _int_or_none(status.get("cpu-load", status.get("cpu_load", status.get("cpu"))))
     free_memory = _int_or_none(status.get("free-memory", status.get("free_memory")))
     total_memory = _int_or_none(status.get("total-memory", status.get("total_memory")))
