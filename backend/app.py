@@ -108,13 +108,17 @@ async def migrate_legacy_public_pdfs(session) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
-        if settings.ENVIRONMENT.lower() == "production":
-            # Production schema changes are applied explicitly with Alembic
-            # before the service starts. Never create or mutate schema at startup.
-            await conn.execute(text("SELECT 1"))
+        if settings.DATABASE_URL.startswith("sqlite"):
+            if settings.ENVIRONMENT.lower() == "production":
+                # Production schema changes are applied explicitly with Alembic.
+                await conn.execute(text("SELECT 1"))
+            else:
+                await conn.run_sync(Base.metadata.create_all)
+                await run_sqlite_migrations(conn)
         else:
-            await conn.run_sync(Base.metadata.create_all)
-            await run_sqlite_migrations(conn)
+            # MariaDB/PostgreSQL installations always use Alembic, including
+            # development and CI. Runtime accounts must not require DDL privileges.
+            await conn.execute(text("SELECT 1"))
 
     async with AsyncSessionLocal() as session:
         await migrate_legacy_public_pdfs(session)
