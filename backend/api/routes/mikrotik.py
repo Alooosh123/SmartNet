@@ -55,6 +55,12 @@ async def disconnect_active_user(
             raise HTTPException(status_code=503, detail="فشل الاتصال بالراوتر لتنفيذ الفصل.")
         if not success:
             raise HTTPException(status_code=404, detail="المستخدم غير متصل أو تعذر فصله")
+        db.add(models.AuditLog(
+            action="network_disconnect_executed",
+            performed_by=current_user.get("username", "admin"),
+            details=f"Administrator disconnected hotspot user {name}.",
+        ))
+        await db.commit()
         return {"ok": True, "status": "executed", "message": f"تم فصل المستخدم {name} بنجاح."}
 
     plan = _client_plan(current_user)
@@ -154,7 +160,7 @@ async def approve_network_action(
     db: AsyncSession = Depends(database.get_db),
 ):
     result = await db.execute(
-        select(models.NetworkActionRequest).where(models.NetworkActionRequest.id == request_id)
+        select(models.NetworkActionRequest).where(models.NetworkActionRequest.id == request_id).with_for_update()
     )
     request = result.scalars().first()
     if request is None:
@@ -164,6 +170,8 @@ async def approve_network_action(
     reviewer = getattr(current_admin, "username", "admin")
     if request.requested_by == reviewer:
         raise HTTPException(status_code=409, detail="لا يجوز اعتماد طلب العملية بواسطة نفس منشئه.")
+    if request.action not in {"reboot_router", "disconnect_user"}:
+        raise HTTPException(status_code=400, detail="نوع العملية غير مدعوم.")
 
     try:
         if request.action == "reboot_router":
@@ -172,10 +180,6 @@ async def approve_network_action(
         elif request.action == "disconnect_user" and request.target:
             succeeded = await asyncio.to_thread(mikrotik_service.disconnect_user, request.target)
             execution = {"ok": succeeded, "message": "disconnect executed" if succeeded else "session not found"}
-        else:
-            raise HTTPException(status_code=400, detail="نوع العملية غير مدعوم.")
-    except HTTPException:
-        raise
     except Exception:
         request.status = "failed"
         request.reviewed_by = reviewer
