@@ -39,6 +39,7 @@ def _production_settings(**overrides):
         "MARIADB_PASSWORD": "mariadb-strong-password-2026",
         "MARIADB_ROOT_PASSWORD": "mariadb-root-strong-password-2026",
         "PAYMENT_PROVIDER_MODE": "manual",
+        "METRICS_TOKEN": "SmartNet-production-metrics-token-example-2026!",
         
         "CORS_ORIGINS": ["https://smartnet.example"],
     }
