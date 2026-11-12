@@ -31,11 +31,14 @@ CREATE USER 'smartnet_migrator'@'127.0.0.1' IDENTIFIED BY 'REPLACE_WITH_DIFFEREN
 GRANT ALL PRIVILEGES ON smartnet.* TO 'smartnet_migrator'@'127.0.0.1';
 
 CREATE USER 'smartnet_backup'@'127.0.0.1' IDENTIFIED BY 'REPLACE_WITH_DIFFERENT_LONG_RANDOM_BACKUP_SECRET';
-GRANT SELECT, SHOW VIEW, TRIGGER, LOCK TABLES, CREATE, ALTER, INSERT, UPDATE, DELETE, DROP ON smartnet.* TO 'smartnet_backup'@'127.0.0.1';
+GRANT SELECT, SHOW VIEW, TRIGGER, LOCK TABLES ON smartnet.* TO 'smartnet_backup'@'127.0.0.1';
+
+CREATE USER 'smartnet_restore'@'127.0.0.1' IDENTIFIED BY 'REPLACE_WITH_DIFFERENT_LONG_RANDOM_RESTORE_SECRET';
+GRANT ALL PRIVILEGES ON smartnet.* TO 'smartnet_restore'@'127.0.0.1';
 FLUSH PRIVILEGES;
 ~~~
 
-The application account is DML-only. Alembic uses the separate DDL account before service startup. The backup account is only used by backup tools.
+The application account is DML-only. Alembic uses the separate DDL account before service startup. The backup account is read-only apart from metadata/lock privileges required by dump. The separately protected restore account has table-replacement privileges and should only be enabled for a controlled maintenance restore.
 
 Copy .env.example to backend/.env and set at least:
 
@@ -48,6 +51,8 @@ MARIADB_PORT=3306
 MARIADB_DATABASE=smartnet
 MARIADB_USER=smartnet_backup
 MARIADB_PASSWORD=BACKUP_ACCOUNT_PASSWORD
+MARIADB_RESTORE_USER=smartnet_restore
+MARIADB_RESTORE_PASSWORD=RESTORE_ACCOUNT_PASSWORD
 ~~~
 
 URL-encode reserved characters in the username/password. Do not reuse one password for all database users. Protect backend/.env so only the service administrator can read it.
