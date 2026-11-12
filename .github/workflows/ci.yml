@@ -141,7 +141,7 @@ jobs:
           CREATE USER 'smartnet_migrator'@'%' IDENTIFIED BY 'ci-migration-password';
           GRANT ALL PRIVILEGES ON smartnet_ci.* TO 'smartnet_migrator'@'%';
           CREATE USER 'smartnet_backup'@'%' IDENTIFIED BY 'ci-backup-password';
-          GRANT SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES, CREATE, ALTER, INSERT, UPDATE, DELETE, DROP ON smartnet_ci.* TO 'smartnet_backup'@'%';
+          GRANT SELECT, SHOW VIEW, SHOW ROUTINE, TRIGGER, EVENT, LOCK TABLES, CREATE, ALTER, INSERT, UPDATE, DELETE, DROP ON smartnet_ci.* TO 'smartnet_backup'@'%';
           FLUSH PRIVILEGES;
           SQL
       - name: Apply Alembic migrations against MariaDB 11.8
