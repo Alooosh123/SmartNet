@@ -203,6 +203,12 @@ function App() {
   const [batches, setBatches] = useState([]);
   const [clients, setClients] = useState([]);
   const [registrations, setRegistrations] = useState([]);
+  const [networkActionRequests, setNetworkActionRequests] = useState([]);
+  const [networkObservations, setNetworkObservations] = useState([]);
+  const [paymentReconciliation, setPaymentReconciliation] = useState(null);
+  const [statementResult, setStatementResult] = useState(null);
+  const [diagnosticResult, setDiagnosticResult] = useState(null);
+  const [statementUploading, setStatementUploading] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [chatQuota, setChatQuota] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
@@ -231,6 +237,9 @@ function App() {
         api("/cards/batches", token),
         api("/auth/clients", token),
         api("/auth/registrations", token),
+        api("/mikrotik/action-requests", token),
+        api("/mikrotik/observations", token),
+        api("/auth/reconciliation/report", token),
       ]);
       if (results[0].status === "fulfilled") setHealth(results[0].value);
       if (results[1].status === "fulfilled") setRouter(results[1].value);
@@ -238,6 +247,9 @@ function App() {
       if (results[3].status === "fulfilled") setBatches(results[3].value);
       if (results[4].status === "fulfilled") setClients(results[4].value);
       if (results[5].status === "fulfilled") setRegistrations(results[5].value);
+      if (results[6].status === "fulfilled") setNetworkActionRequests(results[6].value);
+      if (results[7].status === "fulfilled") setNetworkObservations(results[7].value);
+      if (results[8].status === "fulfilled") setPaymentReconciliation(results[8].value);
       const failed = results.filter(x => x.status === "rejected");
       if (failed.length) setError(failed.map(x => x.reason?.message).join(" — "));
     } else {
@@ -263,6 +275,7 @@ function App() {
       if (results[2].status === "fulfilled") setChatMessages(results[2].value);
       if (results[3].status === "fulfilled") setRouter(results[3].value);
       setHealth(null); setUsers([]); setBatches([]); setClients([]); setRegistrations([]);
+      setNetworkActionRequests([]); setNetworkObservations([]); setPaymentReconciliation(null);
       const failed = results.filter(x => x.status === "rejected");
       if (failed.length) setError(failed.map(x => x.reason?.message).join(" — "));
     }
@@ -335,8 +348,62 @@ function App() {
   }
 
   async function reboot() {
-    if (!window.confirm("هل أنت متأكد من إعادة تشغيل الراوتر؟ ستنقطع الشبكة مؤقتاً.")) return;
-    await action(()=>api("/mikrotik/reboot", token, { method: "POST" }), "تم إرسال أمر إعادة التشغيل.");
+    const isClientRequest = role !== "admin";
+    const promptText = isClientRequest
+      ? "سيتم إرسال طلب إعادة تشغيل الراوتر للإدارة للمراجعة، ولن ينفذ مباشرة. متابعة؟"
+      : "هل أنت متأكد من إعادة تشغيل الراوتر؟ ستنقطع الشبكة مؤقتاً.";
+    if (!window.confirm(promptText)) return;
+    await action(
+      () => api("/mikrotik/reboot", token, { method: "POST" }),
+      isClientRequest ? "تم إرسال طلب إعادة التشغيل إلى الإدارة للموافقة." : "تم إرسال أمر إعادة التشغيل."
+    );
+  }
+
+  async function reviewNetworkRequest(requestId, approve) {
+    if (approve) {
+      if (!window.confirm("اعتماد وتنفيذ العملية على الراوتر الآن؟")) return;
+      await action(
+        () => api("/mikrotik/action-requests/" + requestId + "/approve", token, { method: "POST" }),
+        "تم اعتماد العملية وتنفيذها."
+      );
+    } else {
+      const reason = window.prompt("أدخل سبب رفض الطلب:");
+      if (!reason || reason.trim().length < 6) return;
+      await action(
+        () => api("/mikrotik/action-requests/" + requestId + "/reject?reason=" + encodeURIComponent(reason.trim()), token, { method: "POST" }),
+        "تم رفض طلب العملية وتوثيق السبب."
+      );
+    }
+  }
+
+  async function uploadReconciliationStatement(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setStatementUploading(true);
+    setError("");
+    setStatementResult(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const result = await api("/auth/reconciliation/statement", token, { method: "POST", body: form });
+      setStatementResult(result);
+      setPaymentReconciliation(await api("/auth/reconciliation/report", token));
+      setNotice("اكتملت مطابقة الكشف. لم يغيّر النظام أي حالة دفع أو اشتراك.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setStatementUploading(false);
+      event.target.value = "";
+    }
+  }
+
+  async function runNetworkDiagnostic() {
+    const question = window.prompt("صف مشكلة الشبكة التي تريد تشخيصها:");
+    if (!question || !question.trim()) return;
+    await action(
+      () => api("/mikrotik/diagnostics?question=" + encodeURIComponent(question.trim()), token, { method: "POST" }).then(setDiagnosticResult),
+      "تم إعداد تقرير تشخيص للقراءة فقط."
+    );
   }
 
   async function changePassword() {
