@@ -23,9 +23,11 @@ RESTORE_DATABASE="${RESTORE_DATABASE:-$MARIADB_DATABASE}"
 
 gzip -t "$DB_ARCHIVE"
 tar -tzf "$UPLOADS_ARCHIVE" >/dev/null
+podman inspect smartnet-mariadb >/dev/null
+podman inspect smartnet-backend >/dev/null
 echo "Restoring MariaDB database '$RESTORE_DATABASE' and private uploads."
 echo "This overwrites current data. Stop application traffic before proceeding."
-gunzip -c "$DB_ARCHIVE" | podman-compose -f podman-compose.yml exec -T mariadb \
+gunzip -c "$DB_ARCHIVE" | podman exec -i smartnet-mariadb \
   mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$RESTORE_DATABASE"
-podman-compose -f podman-compose.yml exec -T backend tar -xzf - -C /app/backend < "$UPLOADS_ARCHIVE"
+podman exec -i smartnet-backend tar -xzf - -C /app/backend < "$UPLOADS_ARCHIVE"
 echo "Restore completed. Run the post-restore validation checklist in docs/PRODUCTION_RUNBOOK.md."
