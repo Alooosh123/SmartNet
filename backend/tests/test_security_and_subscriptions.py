@@ -29,7 +29,8 @@ def _production_settings(**overrides):
         "PAYMENT_DEMO_MODE": False,
         "MIKROTIK_DEMO_MODE": False,
         "MIKROTIK_PASSWORD": "router-strong-password",
-        "DATABASE_URL": "postgresql+asyncpg://smartnet:secret@db:5432/smartnet",
+        "DATABASE_URL": "mysql+asyncmy://smartnet_app:runtime-secret@127.0.0.1:3306/smartnet",
+        "MIGRATION_DATABASE_URL": "mysql+asyncmy://smartnet_migrator:migration-secret@127.0.0.1:3306/smartnet",
         "PAYMENT_PROVIDER_MODE": "manual",
         "POSTGRES_PASSWORD": "postgres-strong-password-2026",
         "CORS_ORIGINS": ["https://smartnet.example"],
@@ -44,11 +45,13 @@ def test_production_settings_accept_realistic_manual_payment_configuration():
     assert settings.PAYMENT_PROVIDER_MODE == "manual"
 
 
-def test_production_settings_reject_default_postgres_password():
+def test_production_settings_reject_shared_mariadb_runtime_and_migration_user():
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
-        _production_settings(POSTGRES_PASSWORD="dev-only-postgres-password-change-me")
+        _production_settings(
+            MIGRATION_DATABASE_URL="mysql+asyncmy://smartnet_app:runtime-secret@127.0.0.1:3306/smartnet"
+        )
 
 
 @pytest.mark.asyncio
