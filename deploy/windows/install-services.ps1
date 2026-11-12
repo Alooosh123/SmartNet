@@ -15,6 +15,6 @@ if (-not (Test-Path (Join-Path $projectRoot "backend\.env"))) {
 }
 & (Join-Path $serviceDir "smartnet-backend.exe") install
 if ($LASTEXITCODE -ne 0) { throw "Backend service install failed." }
-& (Join-Path $serviceDir "smartnet-caddy.exe") install
+& (Join-Path $serviceDir "caddy-service.exe") install
 if ($LASTEXITCODE -ne 0) { throw "Caddy service install failed." }
 Write-Host "Services installed. Start MariaDB, then SmartNet Backend, then SmartNet HTTPS Gateway." -ForegroundColor Green
