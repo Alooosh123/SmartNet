@@ -15,6 +15,7 @@ from database.database import engine, Base, AsyncSessionLocal
 from database import models
 from services.auth_service import auth_service
 from services.subscription_agent import subscription_agent_loop
+from services.network_observer import network_observer_loop
 from api.routes import auth, mikrotik, cards, client
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,12 @@ async def run_sqlite_migrations(conn) -> None:
         "registration_requests": {
             "plan": "VARCHAR DEFAULT 'monthly'",
             "price": "INTEGER DEFAULT 20",
+            "currency": "VARCHAR(3) DEFAULT 'USD'",
+            "payment_verified_amount": "NUMERIC(12, 2)",
+            "payment_verified_currency": "VARCHAR(3)",
+            "payment_verified_by": "VARCHAR(120)",
+            "payment_verified_at": "DATETIME",
+            "payment_verification_note": "VARCHAR(500)",
             "receipt_image": "VARCHAR",
             "registration_token_hash": "VARCHAR",
         },
@@ -129,11 +136,12 @@ async def lifespan(app: FastAPI):
 
     stop_event = asyncio.Event()
     agent_task = asyncio.create_task(subscription_agent_loop(stop_event))
+    observer_task = asyncio.create_task(network_observer_loop(stop_event))
     try:
         yield
     finally:
         stop_event.set()
-        await agent_task
+        await asyncio.gather(agent_task, observer_task, return_exceptions=True)
 
 
 app = FastAPI(title="SmartNet API", version="1.1.0", lifespan=lifespan)
