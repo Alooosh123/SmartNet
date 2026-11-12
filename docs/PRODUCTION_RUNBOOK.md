@@ -18,6 +18,13 @@ The production target is MariaDB 11.4 + Podman Compose. Docker and PostgreSQL ar
 2. Copy root `.env.example` to root `.env`; replace every example secret.
 3. Set `ENVIRONMENT=production`, `DATABASE_BACKEND=mariadb`, `MARIADB_DATABASE`, `MARIADB_USER`, strong unique `MARIADB_PASSWORD` and `MARIADB_ROOT_PASSWORD`.
 4. Set unique 32+ character `SECRET_KEY` and `PAYMENT_WEBHOOK_SECRET`, unique dashboard login and password, exact HTTPS `CORS_ORIGINS`, and real domain / ACME email.
+5. Run the environment preflight before starting any service:
+
+```bash
+bash scripts/check-production-env.sh
+```
+
+The preflight validates secrets, demo flags, TLS settings, separate MikroTik accounts, and HTTPS configuration without printing secret values.
 5. Configure RouterOS production settings: `MIKROTIK_DEMO_MODE=false`, `MIKROTIK_USE_SSL=true`, `MIKROTIK_SSL_VERIFY=true`, `MIKROTIK_SSL_VERIFY_HOSTNAME=true`, the secure API-SSL port (normally 8729), router address, a separate read-only monitor account (`MIKROTIK_MONITOR_USERNAME/PASSWORD`) and a separate write-capable operator account (`MIKROTIK_OPERATOR_USERNAME/PASSWORD`). Do not reuse the operator account in the monitoring worker.
 6. Set a payment mode. For now `PAYMENT_PROVIDER_MODE=manual` is the complete operational path. Do not choose gateway mode until its provider-specific adapter is implemented and accepted.
 7. Start services:
