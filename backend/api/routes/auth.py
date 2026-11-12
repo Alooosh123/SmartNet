@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Optional
 from pathlib import Path
 import uuid
@@ -12,6 +13,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func
 
 from database import models, schemas, database
 from services.auth_service import auth_service
@@ -323,9 +325,33 @@ async def list_registrations(db: AsyncSession = Depends(database.get_db), curren
     return response
 
 
+@router.get('/payments/reconciliation')
+async def payment_reconciliation(
+    db: AsyncSession = Depends(database.get_db),
+    current_admin = Depends(get_current_admin),
+):
+    """Read-only exception report for manual-payment reconciliation."""
+    result = await db.execute(select(models.RegistrationRequest).order_by(models.RegistrationRequest.id.desc()))
+    registrations = result.scalars().all()
+    anomalies = []
+    for reg in registrations:
+        verification_result = await db.execute(select(models.PaymentVerification).where(models.PaymentVerification.registration_id == reg.id))
+        verification = verification_result.scalars().first()
+        if reg.processed and not reg.paid:
+            anomalies.append({"registration_id": reg.id, "code": "activated_without_payment", "severity": "critical"})
+        if settings.PAYMENT_PROVIDER_MODE == "manual" and reg.paid and verification is None:
+            anomalies.append({"registration_id": reg.id, "code": "paid_without_manual_verification", "severity": "high"})
+        if verification is not None:
+            if verification.amount != Decimal(str(reg.price or 0)) or verification.currency != (reg.currency or "USD").upper():
+                anomalies.append({"registration_id": reg.id, "code": "payment_amount_or_currency_mismatch", "severity": "critical"})
+            if verification.external_reference != reg.payment_ref:
+                anomalies.append({"registration_id": reg.id, "code": "payment_reference_mismatch", "severity": "high"})
+    return {"mode": settings.PAYMENT_PROVIDER_MODE, "checked_registrations": len(registrations), "anomaly_count": len(anomalies), "anomalies": anomalies}
+
 @router.post('/registrations/{reg_id}/verify-manual')
 async def verify_manual_payment(
     reg_id: int,
+    payload: schemas.ManualPaymentVerification,
     db: AsyncSession = Depends(database.get_db),
     current_admin = Depends(get_current_admin),
 ):
@@ -344,22 +370,46 @@ async def verify_manual_payment(
     if reg.processed:
         raise HTTPException(status_code=409, detail="تم اعتماد هذا الطلب مسبقاً")
     if reg.paid:
-        return {"ok": True, "paid": True, "processed": False, "detail": "الدفع مسجل كمؤكد مسبقاً"}
+        return {"ok": True, "paid": True, "processed": False, "detail": "الدفع مسجل كمدفوع مسبقاً"}
 
+    external_reference = payload.external_reference.strip()
+    currency = payload.currency.strip().upper()
+    expected_amount = Decimal(str(reg.price or 0))
+    if currency != (reg.currency or "USD").upper():
+        raise HTTPException(status_code=400, detail="عملة الحوالة لا تطابق عملة طلب الاشتراك")
+    if payload.amount != expected_amount:
+        raise HTTPException(status_code=400, detail="المبلغ المستلم لا يطابق قيمة الاشتراك")
+    if len(external_reference) < 5:
+        raise HTTPException(status_code=400, detail="مرجع الحوالة أو رقم العملية مطلوب")
+    duplicate = await db.execute(
+        select(models.PaymentVerification).where(models.PaymentVerification.external_reference == external_reference)
+    )
+    if duplicate.scalars().first():
+        raise HTTPException(status_code=409, detail="مرجع الحوالة مستخدم في عملية أخرى")
+
+    verifier = getattr(current_admin, "username", "admin")
+    db.add(models.PaymentVerification(
+        registration_id=reg.id,
+        amount=payload.amount,
+        currency=currency,
+        external_reference=external_reference,
+        verified_by=verifier,
+        notes=(payload.notes or "").strip() or None,
+    ))
     reg.paid = True
-    if not reg.payment_ref or reg.payment_ref.startswith("smartnet-"):
-        reg.payment_ref = f"manual-{reg.id}-{uuid.uuid4().hex}"
+    reg.payment_ref = external_reference
     db.add(models.AuditLog(
         action="manual_payment_verified",
-        performed_by=getattr(current_admin, "username", "admin"),
-        details=f"Administrator manually verified money receipt for registration #{reg.id}; client activation remains pending",
+        performed_by=verifier,
+        details=f"Verified registration #{reg.id}: {payload.amount} {currency}; ref={external_reference}",
     ))
     await db.commit()
     return {
         "ok": True,
         "paid": True,
         "processed": False,
-        "message": "تم تسجيل تأكيد وصول المبلغ. يجب اعتماد الاشتراك بصورة منفصلة لتفعيل الحساب.",
+        "payment_reference": external_reference,
+        "message": "تم توثيق المبلغ ومرجع الحوالة. تفعيل الحساب ما زال يتطلب اعتماداً منفصلاً.",
     }
 
 
@@ -379,6 +429,15 @@ async def approve_registration(
         raise HTTPException(status_code=400, detail="تمت معالجة هذا الطلب مسبقاً")
     if not reg.paid:
         raise HTTPException(status_code=400, detail="لا يمكن تفعيل المشترك قبل تأكيد الدفع")
+    if settings.PAYMENT_PROVIDER_MODE == "manual":
+        verification = await db.execute(
+            select(models.PaymentVerification).where(models.PaymentVerification.registration_id == reg.id)
+        )
+        verified_payment = verification.scalars().first()
+        if verified_payment is None:
+            raise HTTPException(status_code=409, detail="لا يمكن اعتماد طلب الدفع اليدوي دون سجل تحقق مالي موثق")
+        if verified_payment.amount != Decimal(str(reg.price or 0)) or verified_payment.currency != (reg.currency or "USD").upper():
+            raise HTTPException(status_code=409, detail="بيانات التحقق المالي لا تطابق قيمة الاشتراك")
 
     plan_key = reg.plan or "monthly"
     plan_info = PLANS.get(plan_key, PLANS["monthly"])
