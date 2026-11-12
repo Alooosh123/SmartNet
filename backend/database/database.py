@@ -4,11 +4,15 @@ from typing import AsyncGenerator
 from config.settings import settings
 
 connect_args = {"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
+engine_options = {"pool_pre_ping": True}
+if settings.DATABASE_URL.startswith("mysql+asyncmy://"):
+    engine_options.update({"pool_size": 10, "max_overflow": 20, "pool_recycle": 1800})
 
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
     connect_args=connect_args,
+    **engine_options,
 )
 
 AsyncSessionLocal = async_sessionmaker(
