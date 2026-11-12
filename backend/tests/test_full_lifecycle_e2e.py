@@ -14,7 +14,6 @@ from PIL import Image
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from api.routes.cards import pdf_service
 from app import app
 from config.settings import settings
 from database.database import Base, get_db
@@ -55,14 +54,9 @@ def smartnet_e2e(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
     app.dependency_overrides[get_db] = override_get_db
 
-    created_pdfs = []
-    receipts = []
-
     with TestClient(app) as client:
         yield {
             "client": client,
-            "created_pdfs": created_pdfs,
-            "receipts": receipts,
         }
 
     app.dependency_overrides.clear()
@@ -209,7 +203,7 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
     reboot_chat = client.post(
         "/client/chat",
         headers=customer_headers,
-        json={"message": "أعد تشغيل الراوتر"},
+        json={"message": "إعادة تشغيل الراوتر"},
     )
     assert reboot_chat.status_code == 200
     assert reboot_chat.json()["model"] == "smartnet-safe-action-guidance"
