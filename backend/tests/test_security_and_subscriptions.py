@@ -120,3 +120,16 @@ async def test_receipt_does_not_mark_registration_as_paid():
         assert refreshed.paid is False
         assert refreshed.processed is False
     await engine.dispose()
+
+
+def test_application_does_not_require_mariadb_root_secret():
+    # Root credentials belong only to the MariaDB service, not the API container.
+    settings = _production_settings(MARIADB_ROOT_PASSWORD="")
+    assert settings.DATABASE_BACKEND == "mariadb"
+
+
+def test_application_rejects_weak_root_secret_when_explicitly_supplied():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        _production_settings(MARIADB_ROOT_PASSWORD="weak")
