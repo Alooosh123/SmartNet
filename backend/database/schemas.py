@@ -71,7 +71,6 @@ class CardBatchResponse(BaseModel):
     profile: str
     count: int
     created_at: datetime
-    pdf_path: Optional[str]
     model_config = {"from_attributes": True}
 
 
