@@ -326,7 +326,7 @@ function App() {
     const reference = window.prompt("أدخل رقم الحوالة/مرجع العملية الذي تحققّت منه:");
     if (!reference || !reference.trim()) return;
     const amount = window.prompt("أدخل المبلغ المستلم كما يظهر في كشف الحساب:", String(registration.price));
-    if (!amount || !/^\\d+(\\.\\d{1,2})?$/.test(amount.trim())) {
+    if (!amount || !/^\d+(\.\d{1,2})?$/.test(amount.trim())) {
       setError("المبلغ المدخل غير صالح.");
       return;
     }
