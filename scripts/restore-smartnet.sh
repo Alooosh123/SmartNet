@@ -13,17 +13,17 @@ if [[ $# -ne 2 ]]; then
 fi
 DB_ARCHIVE="$1"
 UPLOADS_ARCHIVE="$2"
-RESTORE_DATABASE="${RESTORE_DATABASE:-$MARIADB_DATABASE}"
 [[ -f "$DB_ARCHIVE" && -f "$UPLOADS_ARCHIVE" ]] || { echo "Backup file not found." >&2; exit 2; }
 
 set -a
 # shellcheck disable=SC1091
 source ./.env
 set +a
+RESTORE_DATABASE="${RESTORE_DATABASE:-$MARIADB_DATABASE}"
 
 gzip -t "$DB_ARCHIVE"
 tar -tzf "$UPLOADS_ARCHIVE" >/dev/null
-echo "Restoring MariaDB database '$MARIADB_DATABASE' and private uploads."
+echo "Restoring MariaDB database '$RESTORE_DATABASE' and private uploads."
 echo "This overwrites current data. Stop application traffic before proceeding."
 gunzip -c "$DB_ARCHIVE" | podman-compose -f podman-compose.yml exec -T mariadb \
   mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$RESTORE_DATABASE"
