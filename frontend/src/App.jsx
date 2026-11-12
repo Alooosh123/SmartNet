@@ -309,6 +309,31 @@ function App() {
     } catch (err) { setError(err.message); }
   }
 
+  async function verifyManualPayment(registration) {
+    const reference = window.prompt("أدخل رقم الحوالة/مرجع العملية الذي تحققّت منه:");
+    if (!reference || !reference.trim()) return;
+    const amount = window.prompt("أدخل المبلغ المستلم كما يظهر في كشف الحساب:", String(registration.price));
+    if (!amount || !/^\\d+(\\.\\d{1,2})?$/.test(amount.trim())) {
+      setError("المبلغ المدخل غير صالح.");
+      return;
+    }
+    const note = window.prompt("اكتب ملاحظة المراجعة المالية (مصدر التحقق/اسم القناة):");
+    if (!note || note.trim().length < 6) {
+      setError("أدخل ملاحظة مراجعة من 6 أحرف على الأقل.");
+      return;
+    }
+    if (!window.confirm("تأكيد توثيق وصول " + amount + " USD للمرجع " + reference + "؟")) return;
+    await action(() => api(`/auth/registrations/${registration.id}/verify-manual`, token, {
+      method: "POST",
+      body: JSON.stringify({
+        payment_reference: reference.trim(),
+        amount: amount.trim(),
+        currency: "USD",
+        note: note.trim(),
+      }),
+    }), "تم توثيق الحوالة. أصبح الطلب جاهزاً لاعتماد الاشتراك بصورة منفصلة.");
+  }
+
   async function reboot() {
     if (!window.confirm("هل أنت متأكد من إعادة تشغيل الراوتر؟ ستنقطع الشبكة مؤقتاً.")) return;
     await action(()=>api("/mikrotik/reboot", token, { method: "POST" }), "تم إرسال أمر إعادة التشغيل.");
@@ -462,7 +487,7 @@ function App() {
           <div className="section-intro"><div><h2>طلبات الاشتراك والدفع</h2><p className="muted">راجع إشعار الدفع أو صورة الحوالة قبل اعتماد حساب العميل.</p></div></div>
           <div className="alert warning"><AlertTriangle size={18}/> رفع صورة الحوالة لا يؤكد الدفع تلقائياً. تحقق من التحويل في حسابك أو بوابة الدفع قبل الموافقة.</div>
           <div className="panel"><div className="table-wrap"><table><thead><tr><th>رقم الطلب</th><th>المستخدم</th><th>الباقة</th><th>المبلغ</th><th>الدفع</th><th>الحوالة</th><th>الإجراء</th></tr></thead><tbody>{registrations.map(r=><tr key={r.id}><td>#{r.id}</td><td className="mono">{r.username}</td><td>{r.plan}</td><td>{r.price} USD</td><td><span className={r.paid?"status-pill good":"status-pill warn"}>{r.paid?"مسجل كمدفوع":"بانتظار الدفع"}</span></td><td>{r.receipt_image?<button className="table-action" onClick={()=>downloadReceipt(r.id)}><Eye size={15}/> عرض</button>:"—"}</td><td><div className="row-actions">
-            {!r.processed&&!r.paid&&<button className="table-action" onClick={()=>{if(window.confirm("هل تحققت من وصول المبلغ فعلياً إلى حسابك وبنفس القيمة والعملة؟ سيُسجل قرار التحقق باسمك.")) action(()=>api(`/auth/registrations/${r.id}/verify-manual`,token,{method:"POST"}),"تم تأكيد وصول المبلغ. أصبح الطلب جاهزاً للاعتماد.")}}>تأكيد وصول المبلغ</button>}
+            {!r.processed&&!r.paid&&<button className="table-action" onClick={()=>verifyManualPayment(r)}>تأكيد وصول المبلغ</button>}
             {!r.processed&&r.paid&&<button className="approve-btn" onClick={()=>{if(window.confirm("تفعيل حساب العميل الآن؟")) action(()=>api(`/auth/registrations/${r.id}/approve`,token,{method:"POST"}),"تم اعتماد الاشتراك.")}}><CheckCircle2 size={15}/> اعتماد الاشتراك</button>}
             {r.processed&&<span className="muted">معتمد</span>}
           </div></td></tr>)}</tbody></table></div>{!registrations.length&&<Empty text="لا توجد طلبات تسجيل حالياً."/>}</div>
