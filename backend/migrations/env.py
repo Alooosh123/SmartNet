@@ -12,13 +12,14 @@ from database import models  # noqa: F401 - register all models
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
+migration_database_url = settings.MIGRATION_DATABASE_URL or settings.DATABASE_URL
+config.set_main_option("sqlalchemy.url", migration_database_url.replace("%", "%%"))
 target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=settings.DATABASE_URL,
+        url=migration_database_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
