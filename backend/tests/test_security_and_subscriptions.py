@@ -38,8 +38,8 @@ def _production_settings(**overrides):
         "DATABASE_URL": "mysql+asyncmy://smartnet:secret@db:3306/smartnet?charset=utf8mb4",
         "MARIADB_DATABASE": "smartnet",
         "MARIADB_USER": "smartnet",
-        "MARIADB_PASSWORD": "mariadb-app-password-2026-strong",
-        "MARIADB_ROOT_PASSWORD": "mariadb-root-password-2026-strong",
+        "MARIADB_PASSWORD": "MariaDBAppPassword2026Strong123",
+        "MARIADB_ROOT_PASSWORD": "MariaDBRootPassword2026Strong456",
         "APP_PUBLIC_URL": "https://smartnet.example",
         "CORS_ORIGINS": ["https://smartnet.example"],
     }
