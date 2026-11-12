@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, BigInteger, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database.database import Base
+
 
 class Admin(Base):
     __tablename__ = "admins"
@@ -9,6 +10,7 @@ class Admin(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
+
 
 class CardBatch(Base):
     __tablename__ = "card_batches"
@@ -18,6 +20,7 @@ class CardBatch(Base):
     owner_username = Column(String, nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     pdf_path = Column(String, nullable=True)
+
 
 class Card(Base):
     __tablename__ = "cards"
@@ -34,8 +37,8 @@ class RegistrationRequest(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    plan = Column(String, default="monthly", nullable=True)  # 'monthly', 'semi_annual', 'annual'
-    price = Column(Integer, default=20, nullable=True)       # 20, 60, 100
+    plan = Column(String, default="monthly", nullable=True)
+    price = Column(Integer, default=20, nullable=True)
     paid = Column(Boolean, default=False)
     payment_ref = Column(String, nullable=True, index=True)
     registration_token_hash = Column(String, nullable=True)
@@ -49,7 +52,7 @@ class Client(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    plan = Column(String, default="monthly", nullable=True)  # 'monthly', 'semi_annual', 'annual'
+    plan = Column(String, default="monthly", nullable=True)
     can_reboot_network = Column(Boolean, default=False, nullable=True)
     is_active = Column(Boolean, default=True)
     subscription_expires = Column(DateTime(timezone=True), nullable=True)
@@ -59,7 +62,7 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, index=True, nullable=False)
-    sender = Column(String, nullable=False)  # 'client' or 'bot' or 'owner'
+    sender = Column(String, nullable=False)
     message = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -79,3 +82,47 @@ class SystemSetting(Base):
     value = Column(String, nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+
+class ManualPayment(Base):
+    __tablename__ = "manual_payments"
+    id = Column(Integer, primary_key=True, index=True)
+    registration_id = Column(Integer, ForeignKey("registration_requests.id"), nullable=False, unique=True)
+    payment_method = Column(String(32), nullable=False)
+    reference = Column(String(128), nullable=False, unique=True)
+    amount = Column(Numeric(12, 2), nullable=False)
+    currency = Column(String(3), nullable=False, default="USD")
+    notes = Column(Text, nullable=True)
+    verified_by = Column(String(128), nullable=False)
+    verified_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class NetworkActionRequest(Base):
+    __tablename__ = "network_action_requests"
+    id = Column(Integer, primary_key=True, index=True)
+    action_type = Column(String(24), nullable=False)
+    target_user = Column(String(128), nullable=True)
+    requested_by = Column(String(128), nullable=False, index=True)
+    requested_role = Column(String(24), nullable=False)
+    reason = Column(Text, nullable=False)
+    status = Column(String(24), nullable=False, default="pending", index=True)
+    approved_by = Column(String(128), nullable=True)
+    approval_note = Column(Text, nullable=True)
+    result_summary = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    executed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class NetworkMetric(Base):
+    __tablename__ = "network_metrics"
+    id = Column(Integer, primary_key=True, index=True)
+    observed_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    status = Column(String(24), nullable=False)
+    board_name = Column(String(128), nullable=True)
+    uptime = Column(String(128), nullable=True)
+    cpu_load = Column(Integer, nullable=True)
+    free_memory_bytes = Column(BigInteger, nullable=True)
+    total_memory_bytes = Column(BigInteger, nullable=True)
+    active_users_count = Column(Integer, nullable=True)
+    alert_summary = Column(Text, nullable=True)

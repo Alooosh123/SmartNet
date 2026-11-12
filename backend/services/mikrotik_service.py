@@ -1,6 +1,7 @@
 import logging
 import secrets
 import string
+
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -27,108 +28,99 @@ class MikroTikService:
             raise RuntimeError("routeros_api is not installed; real MikroTik mode is unavailable.")
         if not settings.MIKROTIK_HOST or not settings.MIKROTIK_USERNAME or not settings.MIKROTIK_PASSWORD:
             raise RuntimeError("MIKROTIK_HOST, MIKROTIK_USERNAME and MIKROTIK_PASSWORD must be configured.")
-        connection = routeros_api.RouterOsApiPool(
-            settings.MIKROTIK_HOST,
-            username=settings.MIKROTIK_USERNAME,
-            password=settings.MIKROTIK_PASSWORD,
-            port=settings.MIKROTIK_PORT,
-            plaintext_login=True,
+        return routeros_api.RouterOsApiPool(
+            settings.MIKROTIK_HOST, username=settings.MIKROTIK_USERNAME,
+            password=settings.MIKROTIK_PASSWORD, port=settings.MIKROTIK_PORT,
+            use_ssl=settings.MIKROTIK_USE_SSL, ssl_verify=settings.MIKROTIK_USE_SSL,
+            ssl_verify_hostname=settings.MIKROTIK_USE_SSL,
+            plaintext_login=not settings.MIKROTIK_USE_SSL,
         )
-        return connection
 
     def get_status(self):
         if settings.MIKROTIK_DEMO_MODE:
             return {
-                "platform": "MikroTik RouterOS (Demo)",
-                "board-name": "RB750Gr3 (Demo)",
-                "cpu-load": "14",
-                "free-memory": "104857600",
-                "uptime": "2d 4h 15m",
-                "total-memory": "268435456",
-                "version": "7.15.2 (stable)",
+                "platform": "MikroTik RouterOS (Demo)", "board-name": "RB750Gr3 (Demo)",
+                "cpu-load": "14", "free-memory": "104857600",
+                "uptime": "2d 4h 15m", "total-memory": "268435456", "version": "7.15.2 (stable)",
             }
-
         connection = self._get_api()
         try:
-            api = connection.get_api()
-            resource = api.get_resource('/system/resource')
-            res = resource.get()
-            return res[0] if res else {}
+            result = connection.get_api().get_resource("/system/resource").get()
+            return result[0] if result else {}
         finally:
-            if connection:
-                connection.disconnect()
+            connection.disconnect()
 
     def get_active_users(self):
         if settings.MIKROTIK_DEMO_MODE:
             return list(self._demo_users)
+        connection = self._get_api()
+        try:
+            return connection.get_api().get_resource("/ip/hotspot/active").get()
+        finally:
+            connection.disconnect()
 
+    def monitor_snapshot(self):
+        """Read-only telemetry collection; this method has no write operations."""
+        if settings.MIKROTIK_DEMO_MODE:
+            return {
+                "status": "online", "board_name": "RB750Gr3 (Demo)", "uptime": "2d 4h 15m",
+                "cpu_load": 14, "free_memory_bytes": 104857600,
+                "total_memory_bytes": 268435456, "active_users_count": len(self._demo_users),
+            }
         connection = self._get_api()
         try:
             api = connection.get_api()
-            resource = api.get_resource('/ip/hotspot/active')
-            return resource.get()
+            resources = api.get_resource("/system/resource").get()
+            identity = api.get_resource("/system/identity").get()
+            active = api.get_resource("/ip/hotspot/active").get()
+            resource = resources[0] if resources else {}
+            ident = identity[0] if identity else {}
+            return {
+                "status": "online", "board_name": ident.get("name") or resource.get("board-name"),
+                "uptime": resource.get("uptime"), "cpu_load": resource.get("cpu-load"),
+                "free_memory_bytes": resource.get("free-memory"),
+                "total_memory_bytes": resource.get("total-memory"), "active_users_count": len(active),
+            }
         finally:
-            if connection:
-                connection.disconnect()
+            connection.disconnect()
 
     def disconnect_user(self, name: str) -> bool:
-        """Disconnect an active hotspot user."""
         if settings.MIKROTIK_DEMO_MODE:
             before = len(self._demo_users)
             self._demo_users = [u for u in self._demo_users if u.get("name") != name and u.get("id") != name]
             removed = len(self._demo_users) < before
             logger.info("[DEMO] Disconnected user %s: %s", name, removed)
             return removed
-
         connection = self._get_api()
         try:
-            api = connection.get_api()
-            active_resource = api.get_resource('/ip/hotspot/active')
-            sessions = active_resource.get(user=name)
+            active = connection.get_api().get_resource("/ip/hotspot/active")
+            sessions = active.get(user=name)
             if not sessions:
-                # try by id or name directly
-                sessions = [s for s in active_resource.get() if s.get('user') == name or s.get('.id') == name]
-            if not sessions:
-                return False
+                sessions = [s for s in active.get() if s.get("user") == name or s.get(".id") == name]
             removed = False
-            for s in sessions:
-                sid = s.get('.id') or s.get('id')
-                if sid:
-                    active_resource.remove(id=sid)
+            for item in sessions:
+                session_id = item.get(".id") or item.get("id")
+                if session_id:
+                    active.remove(id=session_id)
                     removed = True
             return removed
         finally:
-            if connection:
-                connection.disconnect()
+            connection.disconnect()
 
     @staticmethod
     def _profile_limit_uptime(profile: str):
-        """Translate known SmartNet card duration labels to RouterOS limit-uptime."""
         value = (profile or "").strip().lower().replace("_", " ")
-        known = {
-            "1 day": "1d",
-            "day": "1d",
-            "يوم": "1d",
-            "يوم واحد": "1d",
-            "1 week": "7d",
-            "week": "7d",
-            "أسبوع": "7d",
-            "اسبوع": "7d",
-            "1 month": "30d",
-            "month": "30d",
-            "شهر": "30d",
-        }
-        return known.get(value)
+        return {
+            "1 day": "1d", "day": "1d", "يوم": "1d", "يوم واحد": "1d",
+            "1 week": "7d", "week": "7d", "أسبوع": "7d", "اسبوع": "7d",
+            "1 month": "30d", "month": "30d", "شهر": "30d",
+        }.get(value)
 
     def generate_cards(self, count: int, profile: str, length: int = 6):
-        """Create unique, cryptographically random Hotspot credentials."""
         if count < 1 or count > 1000:
             raise ValueError("count must be between 1 and 1000")
         if length < 4 or length > 16:
             raise ValueError("length must be between 4 and 16")
-
-        # The existing router usernames are checked before generation to avoid
-        # collisions with prior card batches and other manually-created accounts.
         existing_names = set()
         connection = None
         users_resource = None
@@ -136,86 +128,66 @@ class MikroTikService:
             connection = self._get_api()
             try:
                 api = connection.get_api()
-                users_resource = api.get_resource('/ip/hotspot/user')
-                existing_names = {
-                    item.get("name") for item in users_resource.get()
-                    if item.get("name")
-                }
+                users_resource = api.get_resource("/ip/hotspot/user")
+                existing_names = {x.get("name") for x in users_resource.get() if x.get("name")}
             except Exception:
-                if connection:
-                    connection.disconnect()
+                connection.disconnect()
                 raise
-
         try:
-            alphabet = string.digits
-            cards = []
             reserved = set(existing_names)
+            cards = []
             while len(cards) < count:
-                username = "".join(secrets.choice(alphabet) for _ in range(length))
+                username = "".join(secrets.choice(string.digits) for _ in range(length))
                 if username in reserved:
                     continue
                 reserved.add(username)
-                password = "".join(secrets.choice(alphabet) for _ in range(length))
+                password = "".join(secrets.choice(string.digits) for _ in range(length))
                 cards.append({"username": username, "password": password, "profile": profile})
-
             if users_resource is not None:
+                api = connection.get_api()
+                profile_names = {x.get("name") for x in api.get_resource("/ip/hotspot/user/profile").get()}
+                if profile not in profile_names:
+                    raise ValueError(f"RouterOS Hotspot profile not found: {profile}")
                 for card in cards:
-                    user_args = {
-                        "name": card["username"],
-                        "password": card["password"],
-                        "profile": profile,
-                    }
-                    uptime_limit = self._profile_limit_uptime(profile)
-                    if uptime_limit:
-                        user_args["limit-uptime"] = uptime_limit
-                    users_resource.add(**user_args)
+                    args = {"name": card["username"], "password": card["password"], "profile": profile}
+                    limit = self._profile_limit_uptime(profile)
+                    if limit:
+                        args["limit-uptime"] = limit
+                    users_resource.add(**args)
             return cards
         finally:
             if connection:
                 connection.disconnect()
 
     def reboot_router(self) -> dict:
-        """Send reboot command to MikroTik router or simulate in demo mode."""
         if settings.MIKROTIK_DEMO_MODE:
-            logger.info("[DEMO] Router reboot command executed.")
-            return {
-                "ok": True,
-                "message": "تم إرسال أمر إعادة تشغيل الراوتر بنجاح (وضع التجريب). سيعود الراوتر للعمل خلال دقيقة."
-            }
-
+            logger.info("[DEMO] Router reboot command simulated.")
+            return {"ok": True, "message": "تمت محاكاة أمر إعادة تشغيل الراوتر (وضع التجريب)."}
         connection = self._get_api()
         try:
-            api = connection.get_api()
-            system = api.get_resource('/system')
-            system.call('reboot')
-            return {"ok": True, "message": "تم إرسال أمر إعادة تشغيل الراوتر بنجاح."}
+            connection.get_api().get_resource("/system").call("reboot")
+            return {"ok": True, "message": "تم إرسال أمر إعادة تشغيل الراوتر."}
         finally:
-            if connection:
-                connection.disconnect()
+            connection.disconnect()
 
     def add_custom_cards(self, cards: list, profile: str):
-        """Add owner's custom cards to MikroTik hotspot users."""
         if not settings.MIKROTIK_DEMO_MODE:
             connection = self._get_api()
             try:
                 api = connection.get_api()
-                users_resource = api.get_resource('/ip/hotspot/user')
+                profile_names = {x.get("name") for x in api.get_resource("/ip/hotspot/user/profile").get()}
+                if profile not in profile_names:
+                    raise ValueError(f"RouterOS Hotspot profile not found: {profile}")
+                users = api.get_resource("/ip/hotspot/user")
                 for card in cards:
-                    user_args = {
-                        "name": card["username"],
-                        "password": card["password"],
-                        "profile": profile,
-                    }
-                    uptime_limit = self._profile_limit_uptime(profile)
-                    if uptime_limit:
-                        user_args["limit-uptime"] = uptime_limit
-                    users_resource.add(**user_args)
+                    args = {"name": card["username"], "password": card["password"], "profile": profile}
+                    limit = self._profile_limit_uptime(profile)
+                    if limit:
+                        args["limit-uptime"] = limit
+                    users.add(**args)
             finally:
-                if connection:
-                    connection.disconnect()
+                connection.disconnect()
         return cards
 
 
 mikrotik_service = MikroTikService()
-
-
