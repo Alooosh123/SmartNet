@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     SSID: str = "SmartNet-WiFi"
 
     DATABASE_URL: str = "sqlite+aiosqlite:///./smartnet.db"
+    MIGRATION_DATABASE_URL: Optional[str] = None
     NETWORK_OBSERVER_ENABLED: bool = True
     NETWORK_OBSERVER_INTERVAL_SECONDS: int = 60
     NETWORK_OBSERVER_HISTORY_LIMIT: int = 500
@@ -92,6 +93,12 @@ class Settings(BaseSettings):
             database_url = make_url(self.DATABASE_URL)
             if not database_url.username or not database_url.password or not database_url.host or not database_url.database:
                 raise ValueError("DATABASE_URL must include a MariaDB username, password, host and database.")
+            if self.MIGRATION_DATABASE_URL:
+                if not self.MIGRATION_DATABASE_URL.startswith("mysql+asyncmy://"):
+                    raise ValueError("MIGRATION_DATABASE_URL must use mysql+asyncmy://.")
+                migration_url = make_url(self.MIGRATION_DATABASE_URL)
+                if not migration_url.username or not migration_url.password or not migration_url.host or not migration_url.database:
+                    raise ValueError("MIGRATION_DATABASE_URL must include a MariaDB username, password, host and database.")
             if self.PAYMENT_PROVIDER_MODE not in {"manual", "gateway"}:
                 raise ValueError("PAYMENT_PROVIDER_MODE must be 'manual' or 'gateway'.")
             if self.PAYMENT_PROVIDER_MODE == "gateway" and not self.PAYMENT_CHECKOUT_URL:
