@@ -92,6 +92,8 @@ class Settings(BaseSettings):
                 raise ValueError("MIKROTIK_DEMO_MODE must be false in production.")
             if not self.MIKROTIK_PASSWORD:
                 raise ValueError("MIKROTIK_PASSWORD is required in production.")
+            if self.MIKROTIK_USERNAME.strip().lower() in {"admin", "administrator"}:
+                raise ValueError("Set a dedicated non-default MIKROTIK_USERNAME for operational commands.")
             if self.NETWORK_OBSERVER_ENABLED:
                 if not self.MIKROTIK_READONLY_USERNAME or not self.MIKROTIK_READONLY_PASSWORD:
                     raise ValueError("Read-only MikroTik API credentials are required when the Network Observer is enabled.")
