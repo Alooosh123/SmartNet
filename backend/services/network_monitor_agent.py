@@ -93,7 +93,7 @@ async def collect_network_snapshot(session) -> models.NetworkSnapshot:
     # without limit. Alert/audit history is retained separately.
     retention_cutoff = resolved_at - timedelta(days=settings.NETWORK_SNAPSHOT_RETENTION_DAYS)
     await session.execute(
-        delete(models.NetworkSnapshot).where(models.NetworkSnapshot.created_at < retention_cutoff)
+        delete(models.NetworkSnapshot).where(models.NetworkSnapshot.created_at < retention_cutoff).execution_options(synchronize_session=False)
     )
     await session.commit()
     await session.refresh(snapshot)
