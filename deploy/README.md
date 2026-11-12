@@ -31,7 +31,7 @@ CREATE USER 'smartnet_migrator'@'127.0.0.1' IDENTIFIED BY 'REPLACE_WITH_DIFFEREN
 GRANT ALL PRIVILEGES ON smartnet.* TO 'smartnet_migrator'@'127.0.0.1';
 
 CREATE USER 'smartnet_backup'@'127.0.0.1' IDENTIFIED BY 'REPLACE_WITH_DIFFERENT_LONG_RANDOM_BACKUP_SECRET';
-GRANT SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES, CREATE, ALTER, INSERT, UPDATE, DELETE, DROP ON smartnet.* TO 'smartnet_backup'@'127.0.0.1';
+GRANT SELECT, SHOW VIEW, SHOW ROUTINE, TRIGGER, EVENT, LOCK TABLES, CREATE, ALTER, INSERT, UPDATE, DELETE, DROP ON smartnet.* TO 'smartnet_backup'@'127.0.0.1';
 FLUSH PRIVILEGES;
 ~~~
 
@@ -107,7 +107,7 @@ Caddy routes /auth, /api, /mikrotik, /cards, /client, /uploads and /static to th
 
 Open inbound ports 80 and 443 to Caddy only. Do not expose port 8000, MariaDB 3306 or RouterOS API 8728/8729 to the public internet. Caddy obtains and renews public HTTPS certificates when the domain and ports are correctly configured. For LAN-only use, use an internal CA/certificate approved by the organization.
 
-Linux: install the official Caddy package. Configure a systemd drop-in from deploy/systemd/caddy.env.example and add EnvironmentFile=/etc/caddy/caddy.env to the Caddy service. Then:
+Linux: install the official Caddy package. Copy Caddyfile to /etc/caddy/Caddyfile, copy deploy/systemd/caddy.env.example to /etc/caddy/caddy.env and replace both values, then copy deploy/systemd/caddy.service.d/override.conf to /etc/systemd/system/caddy.service.d/override.conf. Set root:caddy ownership and mode 0640 on caddy.env. Then:
 
 ~~~bash
 sudo systemctl daemon-reload
