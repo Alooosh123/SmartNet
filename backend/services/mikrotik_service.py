@@ -20,17 +20,25 @@ class MikroTikService:
             {"id": "*3", "name": "user_demo_3", "uptime": "25m 12s", "bytes-out": "1048576"},
         ]
 
-    def _get_api(self):
+    def _get_api(self, access: str = "operator"):
         if settings.MIKROTIK_DEMO_MODE:
             return None
         if not ROUTEROS_AVAILABLE:
             raise RuntimeError("routeros_api is not installed; real MikroTik mode is unavailable.")
-        if not settings.MIKROTIK_HOST or not settings.MIKROTIK_USERNAME or not settings.MIKROTIK_PASSWORD:
-            raise RuntimeError("MIKROTIK_HOST, MIKROTIK_USERNAME and MIKROTIK_PASSWORD must be configured.")
+        if access == "monitor":
+            username = settings.MIKROTIK_MONITOR_USERNAME
+            password = settings.MIKROTIK_MONITOR_PASSWORD
+        elif access == "operator":
+            username = settings.MIKROTIK_OPERATOR_USERNAME
+            password = settings.MIKROTIK_OPERATOR_PASSWORD
+        else:
+            raise ValueError("Unknown MikroTik credential profile.")
+        if not settings.MIKROTIK_HOST or not username or not password:
+            raise RuntimeError(f"MikroTik {access} host/user/password must be configured.")
         connection = routeros_api.RouterOsApiPool(
             settings.MIKROTIK_HOST,
-            username=settings.MIKROTIK_USERNAME,
-            password=settings.MIKROTIK_PASSWORD,
+            username=username,
+            password=password,
             port=settings.MIKROTIK_PORT,
             plaintext_login=True,
             use_ssl=settings.MIKROTIK_USE_SSL,
@@ -51,7 +59,7 @@ class MikroTikService:
                 "version": "7.15.2 (stable)",
             }
 
-        connection = self._get_api()
+        connection = self._get_api(access='monitor')
         try:
             api = connection.get_api()
             resource = api.get_resource('/system/resource')
@@ -69,7 +77,7 @@ class MikroTikService:
                 {"name": "1 Week"},
                 {"name": "1 Month"},
             ]
-        connection = self._get_api()
+        connection = self._get_api(access='monitor')
         try:
             api = connection.get_api()
             return api.get_resource("/ip/hotspot/user/profile").get()
@@ -81,7 +89,7 @@ class MikroTikService:
         if settings.MIKROTIK_DEMO_MODE:
             return list(self._demo_users)
 
-        connection = self._get_api()
+        connection = self._get_api(access='monitor')
         try:
             api = connection.get_api()
             resource = api.get_resource('/ip/hotspot/active')
