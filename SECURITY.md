@@ -1,43 +1,44 @@
 # SmartNet Security and Production Gate
 
-## Immediate actions for this repository
+## Production requirements
 
-The repository has previously contained a SQLite database, uploaded receipt/image files,
-generated PDFs and Python bytecode. Removing those files from the current tree does not
-remove them from Git history. Treat any credentials, customer data or payment evidence
-that may have been committed as exposed:
+- Use MariaDB 12.3 LTS via SQLAlchemy asyncmy. Never expose port 3306 publicly.
+- Use Podman/Podman Compose, preferably rootless. Containerfiles run as non-root where supported.
+- Set unique JWT and webhook secrets (32+ characters), non-default admin credentials, and separate 24+ character MariaDB application/root passwords.
+- Use HTTPS at the reverse proxy, exact HTTPS CORS origins and private persistent storage for receipts/PDFs.
+- Connect to MikroTik over VPN/private networking and API-SSL 8729 with certificate verification enabled.
+- Use separate RouterOS identities: observer read-only; controller for explicitly approved changes.
+- Production currently allows manual payment verification only. Receipt upload never means payment has arrived.
 
-1. Rotate the JWT signing key, payment webhook secret, router password and any provider keys.
-2. Review Git history and repository forks/caches. If personal data or secrets were committed,
-   perform a coordinated history rewrite and revoke old credentials.
-3. Do not reuse any real password or payment key from the repository.
-4. Keep receipts private. The API now serves receipt files only to authenticated administrators.
+## Manual payment integrity
 
-## Production configuration
+The administrator checks actual funds outside SmartNet, then records exact amount, currency, method and unique reference. The amount must match the subscription request. A ManualPayment record is separate from subscription activation. A second explicit admin approval activates the account. Reconciliation identifies paid or activated requests without matching manual payment records.
 
-Set `ENVIRONMENT=production`. Application startup rejects default secrets, demo payment,
-demo MikroTik mode, SQLite and non-HTTPS CORS origins. Generate distinct random secrets of
-at least 32 characters for `SECRET_KEY` and `PAYMENT_WEBHOOK_SECRET`.
+A provider gateway is not complete until a provider-specific adapter validates its documented signature, event ID, invoice reference, settlement status, amount and currency, with idempotent processing. A shared-secret callback alone is not sufficient.
 
-Use PostgreSQL with a unique strong database password, HTTPS behind a reverse proxy, a
-private/VPN route to the MikroTik API and a least-privilege RouterOS account. The supplied
-Nginx config rate-limits login, registration and receipt uploads; retain equivalent limits
-if another reverse proxy is used. Do not expose RouterOS API ports to the public internet.
+## Network agent safety
 
-## Payment integration boundary
+- Network Observer reads telemetry only using its separate RouterOS read-only user.
+- Diagnostic Agent uses curated knowledge and returns recommendations; it has no RouterOS write API.
+- Network actions are expiring requests. A different administrator must approve a requested admin operation before router execution.
+- Do not give generic shell execution or RouterOS credentials to an LLM.
 
-The generic callback endpoint authenticates a shared-secret channel and marks a registration
-as paid-pending-review. It does not independently verify a provider signature, event ID,
-settled amount or currency. A real provider adapter must verify all of those fields with the
-provider's official documentation/API before calling the internal callback. Never treat a
-receipt image as payment proof. An administrator must approve the registration after review.
+## Backups and recovery
 
-## Operational controls
+- Keep MariaDB dumps and private uploads/PDFs together in encrypted off-host backups.
+- Run a restore rehearsal on a separate MariaDB target and verify login, subscriptions, payment references and PDF retrieval.
+- Restore scripts require explicit confirmation because restore replaces current records/files.
 
-- Run Alembic migrations before deploying new backend code.
-- Use a managed secrets store or protected environment variables.
-- Apply reverse-proxy rate limits to login, registration, payment and upload endpoints.
-- Back up PostgreSQL and private uploads; test restore procedures.
-- Monitor application logs, failed payment callbacks and MikroTik connectivity.
-- Keep the admin bootstrap password private, then change it after first deployment using the authenticated «تغيير كلمة المرور» action or `POST /auth/change-password`.
-- Run CI and security tests before deployment.
+## Vulnerability management
+
+- CI runs pip-audit and npm audit and fails on disclosed dependency advisories.
+- Dependabot checks Python, npm and GitHub Actions dependencies weekly.
+- Review upgrades and the full CI/browser test result before merging.
+
+## Repository history hygiene
+
+The repository previously contained SQLite databases, uploaded receipt/image files, generated PDFs and bytecode. Removing these from the current branch does not remove them from Git history, forks or caches. Treat any credentials or personal/payment data committed in the past as exposed:
+1. Rotate JWT, webhook, router, provider, Telegram and AI keys.
+2. Review history and forks/caches; coordinate a history rewrite if secrets or personal data were committed.
+3. Never reuse an old secret from Git.
+4. Never commit .env, databases, receipts, exported PDFs or production backups.

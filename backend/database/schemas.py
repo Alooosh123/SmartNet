@@ -1,6 +1,8 @@
-from pydantic import BaseModel
-from typing import Optional, List
 from datetime import datetime
+from decimal import Decimal
+from typing import Optional, List, Literal
+from pydantic import BaseModel, Field, field_validator
+
 
 class Token(BaseModel):
     access_token: str
@@ -30,8 +32,10 @@ class UserProfileResponse(BaseModel):
 class TokenData(BaseModel):
     username: Optional[str] = None
 
+
 class AdminBase(BaseModel):
     username: str
+
 
 class AdminCreate(AdminBase):
     password: str
@@ -48,6 +52,33 @@ class RegistrationCreate(BaseModel):
     plan: Optional[str] = "monthly"
 
 
+class ManualPaymentVerification(BaseModel):
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    currency: Literal["USD"] = "USD"
+    payment_method: Literal["cash", "bank_transfer", "mobile_wallet", "other"]
+    reference: str = Field(min_length=3, max_length=128)
+    notes: Optional[str] = Field(default=None, max_length=1000)
+
+    @field_validator("reference")
+    @classmethod
+    def normalize_reference(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 3:
+            raise ValueError("Payment reference must contain at least 3 characters.")
+        return normalized
+
+
+class NetworkActionRequestCreate(BaseModel):
+    action_type: Literal["reboot", "disconnect"]
+    target_user: Optional[str] = Field(default=None, max_length=128)
+    reason: str = Field(min_length=5, max_length=1000)
+
+    @field_validator("target_user")
+    @classmethod
+    def normalize_target(cls, value: Optional[str]) -> Optional[str]:
+        return value.strip() if value else value
+
+
 class RegistrationResponse(BaseModel):
     id: int
     username: str
@@ -61,10 +92,12 @@ class RegistrationResponse(BaseModel):
     created_at: datetime
     model_config = {"from_attributes": True}
 
+
 class AdminResponse(AdminBase):
     id: int
     is_active: bool
     model_config = {"from_attributes": True}
+
 
 class CardBatchResponse(BaseModel):
     id: int

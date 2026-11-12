@@ -1,4 +1,3 @@
-# Never send secrets or customer/runtime data to Docker build context
 .git
 .github
 .env
@@ -16,4 +15,6 @@ backend/*.db
 backend/uploads/**
 backend/static/pdfs/**
 static/pdfs/**
+data/
+backups/
 *.log

@@ -1,4 +1,4 @@
-# Secrets and local configuration
+# Secrets/local config
 .env
 .env.*
 !.env.example
@@ -18,21 +18,28 @@ venv/
 .coverage
 htmlcov/
 
-# Runtime data (never commit subscriber data or payment evidence)
+# Runtime data
 backend/smartnet.db
 backend/*.db
 backend/uploads/**
 !backend/uploads/.gitkeep
 backend/static/pdfs/**
 !backend/static/pdfs/.gitkeep
+data/
+backups/
+*.sql
+*.sql.gz
+*.tar.gz
 
 # Frontend
 node_modules/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/playwright-report/
+frontend/test-results/
 
-# Editors / OS
+# Editors
 .vscode/
 .idea/
 .DS_Store

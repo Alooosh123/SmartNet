@@ -27,11 +27,20 @@ def _production_settings(**overrides):
         "DASHBOARD_USERNAME": "smartnet-owner",
         "DASHBOARD_PASSWORD": "admin-strong-password-2026!",
         "PAYMENT_DEMO_MODE": False,
-        "MIKROTIK_DEMO_MODE": False,
-        "MIKROTIK_PASSWORD": "router-strong-password",
-        "DATABASE_URL": "postgresql+asyncpg://smartnet:secret@db:5432/smartnet",
         "PAYMENT_PROVIDER_MODE": "manual",
-        "POSTGRES_PASSWORD": "postgres-strong-password-2026",
+        "MIKROTIK_DEMO_MODE": False,
+        "MIKROTIK_USERNAME": "smartnet-control",
+        "MIKROTIK_PASSWORD": "router-control-strong-password",
+        "MIKROTIK_READ_USERNAME": "smartnet-observer",
+        "MIKROTIK_READ_PASSWORD": "router-observer-strong-password",
+        "MIKROTIK_USE_SSL": True,
+        "MIKROTIK_PORT": 8729,
+        "DATABASE_URL": "mysql+asyncmy://smartnet:secret@db:3306/smartnet?charset=utf8mb4",
+        "MARIADB_DATABASE": "smartnet",
+        "MARIADB_USER": "smartnet",
+        "MARIADB_PASSWORD": "MariaDBAppPassword2026Strong123",
+        "MARIADB_ROOT_PASSWORD": "MariaDBRootPassword2026Strong456",
+        "APP_PUBLIC_URL": "https://smartnet.example",
         "CORS_ORIGINS": ["https://smartnet.example"],
     }
     values.update(overrides)
@@ -42,13 +51,22 @@ def test_production_settings_accept_realistic_manual_payment_configuration():
     settings = _production_settings()
     assert settings.ENVIRONMENT == "production"
     assert settings.PAYMENT_PROVIDER_MODE == "manual"
+    assert settings.DATABASE_URL.startswith("mysql+asyncmy://")
+    assert settings.MIKROTIK_READ_USERNAME != settings.MIKROTIK_USERNAME
 
 
-def test_production_settings_reject_default_postgres_password():
+def test_production_settings_reject_default_mariadb_password():
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
-        _production_settings(POSTGRES_PASSWORD="dev-only-postgres-password-change-me")
+        _production_settings(MARIADB_PASSWORD="dev-only-mariadb-password-change-before-production")
+
+
+def test_production_settings_reject_shared_router_read_write_identity():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        _production_settings(MIKROTIK_READ_USERNAME="smartnet-control")
 
 
 @pytest.mark.asyncio

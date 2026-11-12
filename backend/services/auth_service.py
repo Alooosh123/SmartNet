@@ -1,13 +1,12 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError
 from passlib.context import CryptContext
-
 from config.settings import settings
 
-# PBKDF2 is the primary scheme for predictable operation across supported
-# platforms. Existing bcrypt hashes remain readable for migration.
+# PBKDF2 is the preferred current scheme. Existing bcrypt hashes remain verifiable.
 pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto")
 
 
@@ -26,13 +25,12 @@ class AuthService:
     def create_access_token(self, data: dict, expires_delta: Optional[timedelta] = None) -> str:
         now = datetime.now(timezone.utc)
         expires = now + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
-        payload = {**data, "iat": now, "exp": expires}
-        return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+        return jwt.encode({**data, "iat": now, "exp": expires}, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
     def verify_token(self, token: str) -> Optional[Dict[str, Any]]:
         try:
             return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        except JWTError:
+        except InvalidTokenError:
             return None
 
 

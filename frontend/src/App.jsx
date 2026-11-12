@@ -32,6 +32,10 @@ const nav = [
   { id: "cards", label: "كروت الهوت سبوت", icon: Layers3 },
   { id: "clients", label: "المشتركون", icon: Users },
   { id: "payments", label: "طلبات الاشتراك", icon: CreditCard },
+  { id: "reconciliation", label: "المطابقة المالية", icon: ShieldCheck },
+  { id: "approvals", label: "موافقات الشبكة", icon: ShieldCheck },
+  { id: "monitoring", label: "مراقبة الشبكة", icon: Activity },
+  { id: "diagnostics", label: "تشخيص الأعطال", icon: AlertTriangle },
 ];
 const clientNav = [
   { id: "overview", label: "حسابي", icon: Activity },
@@ -203,6 +207,11 @@ function App() {
   const [batches, setBatches] = useState([]);
   const [clients, setClients] = useState([]);
   const [registrations, setRegistrations] = useState([]);
+  const [actionRequests, setActionRequests] = useState([]);
+  const [networkMetrics, setNetworkMetrics] = useState([]);
+  const [networkOverview, setNetworkOverview] = useState(null);
+  const [reconciliation, setReconciliation] = useState(null);
+  const [diagnosis, setDiagnosis] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [chatQuota, setChatQuota] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
@@ -231,6 +240,10 @@ function App() {
         api("/cards/batches", token),
         api("/auth/clients", token),
         api("/auth/registrations", token),
+        api("/mikrotik/action-requests", token),
+        api("/agents/network/overview", token),
+        api("/agents/network/history?limit=30", token),
+        api("/auth/payments/reconciliation", token),
       ]);
       if (results[0].status === "fulfilled") setHealth(results[0].value);
       if (results[1].status === "fulfilled") setRouter(results[1].value);
@@ -238,6 +251,10 @@ function App() {
       if (results[3].status === "fulfilled") setBatches(results[3].value);
       if (results[4].status === "fulfilled") setClients(results[4].value);
       if (results[5].status === "fulfilled") setRegistrations(results[5].value);
+      if (results[6].status === "fulfilled") setActionRequests(results[6].value);
+      if (results[7].status === "fulfilled") setNetworkOverview(results[7].value);
+      if (results[8].status === "fulfilled") setNetworkMetrics(results[8].value);
+      if (results[9].status === "fulfilled") setReconciliation(results[9].value);
       const failed = results.filter(x => x.status === "rejected");
       if (failed.length) setError(failed.map(x => x.reason?.message).join(" — "));
     } else {
@@ -263,6 +280,7 @@ function App() {
       if (results[2].status === "fulfilled") setChatMessages(results[2].value);
       if (results[3].status === "fulfilled") setRouter(results[3].value);
       setHealth(null); setUsers([]); setBatches([]); setClients([]); setRegistrations([]);
+      setActionRequests([]); setNetworkOverview(null); setNetworkMetrics([]); setReconciliation(null);
       const failed = results.filter(x => x.status === "rejected");
       if (failed.length) setError(failed.map(x => x.reason?.message).join(" — "));
     }
@@ -310,8 +328,50 @@ function App() {
   }
 
   async function reboot() {
-    if (!window.confirm("هل أنت متأكد من إعادة تشغيل الراوتر؟ ستنقطع الشبكة مؤقتاً.")) return;
-    await action(()=>api("/mikrotik/reboot", token, { method: "POST" }), "تم إرسال أمر إعادة التشغيل.");
+    if (!window.confirm("سيتم تسجيل طلب إعادة تشغيل ولن ينفذ قبل موافقة مسؤول آخر. هل تريد المتابعة؟")) return;
+    await action(()=>api("/mikrotik/reboot", token, { method: "POST" }), "تم تسجيل طلب إعادة التشغيل بانتظار موافقة مسؤول آخر.");
+  }
+
+  async function verifyManualPayment(registration) {
+    const amount = window.prompt("أدخل المبلغ الذي تحققت من وصوله فعلياً (USD):", String(registration.price));
+    if (amount === null) return;
+    const payment_method = window.prompt("نوع الدفع: cash أو bank_transfer أو mobile_wallet أو other", "mobile_wallet");
+    if (payment_method === null) return;
+    const reference = window.prompt("رقم مرجع التحويل الفعلي (يجب أن يكون فريداً):");
+    if (reference === null || !reference.trim()) return;
+    await action(() => api(`/auth/registrations/${registration.id}/verify-manual`, token, {
+      method: "POST",
+      body: JSON.stringify({ amount: Number(amount), currency: "USD", payment_method, reference: reference.trim() }),
+    }), "تم توثيق الدفع مع مرجعه. بقي اعتماد الاشتراك بصورة منفصلة.");
+  }
+
+  async function collectNetwork() {
+    await action(async () => {
+      const metric = await api("/agents/network/collect", token, { method: "POST" });
+      setNetworkOverview({ latest: metric, agent_mode: "read-only", router_commands_allowed: false });
+      setNetworkMetrics(current => [metric, ...current].slice(0, 30));
+    }, "تم جمع قراءة الشبكة.");
+  }
+
+  async function runDiagnostics() {
+    await action(async () => {
+      const result = await api("/agents/diagnostics/run", token, { method: "POST" });
+      setDiagnosis(result);
+    }, "اكتمل تشخيص الأعطال.");
+  }
+
+  async function approveNetworkRequest(requestId) {
+    if (!window.confirm("هل توافق على تنفيذ هذا الإجراء الآن؟ سيتم تسجيل اسمك ونتيجة التنفيذ.")) return;
+    await action(() => api(`/mikrotik/action-requests/${requestId}/approve`, token, {
+      method: "POST", body: JSON.stringify({ note: "Approved through SmartNet admin console" }),
+    }), "تمت معالجة طلب العملية.");
+  }
+
+  async function rejectNetworkRequest(requestId) {
+    if (!window.confirm("رفض طلب العملية؟")) return;
+    await action(() => api(`/mikrotik/action-requests/${requestId}/reject`, token, {
+      method: "POST", body: JSON.stringify({ note: "Rejected through SmartNet admin console" }),
+    }), "تم رفض طلب العملية.");
   }
 
   async function changePassword() {
@@ -462,12 +522,60 @@ function App() {
           <div className="section-intro"><div><h2>طلبات الاشتراك والدفع</h2><p className="muted">راجع إشعار الدفع أو صورة الحوالة قبل اعتماد حساب العميل.</p></div></div>
           <div className="alert warning"><AlertTriangle size={18}/> رفع صورة الحوالة لا يؤكد الدفع تلقائياً. تحقق من التحويل في حسابك أو بوابة الدفع قبل الموافقة.</div>
           <div className="panel"><div className="table-wrap"><table><thead><tr><th>رقم الطلب</th><th>المستخدم</th><th>الباقة</th><th>المبلغ</th><th>الدفع</th><th>الحوالة</th><th>الإجراء</th></tr></thead><tbody>{registrations.map(r=><tr key={r.id}><td>#{r.id}</td><td className="mono">{r.username}</td><td>{r.plan}</td><td>{r.price} USD</td><td><span className={r.paid?"status-pill good":"status-pill warn"}>{r.paid?"مسجل كمدفوع":"بانتظار الدفع"}</span></td><td>{r.receipt_image?<button className="table-action" onClick={()=>downloadReceipt(r.id)}><Eye size={15}/> عرض</button>:"—"}</td><td><div className="row-actions">
-            {!r.processed&&!r.paid&&<button className="table-action" onClick={()=>{if(window.confirm("هل تحققت من وصول المبلغ فعلياً إلى حسابك وبنفس القيمة والعملة؟ سيُسجل قرار التحقق باسمك.")) action(()=>api(`/auth/registrations/${r.id}/verify-manual`,token,{method:"POST"}),"تم تأكيد وصول المبلغ. أصبح الطلب جاهزاً للاعتماد.")}}>تأكيد وصول المبلغ</button>}
+            {!r.processed&&!r.paid&&<button className="table-action" onClick={()=>verifyManualPayment(r)}>تأكيد وصول المبلغ</button>}
             {!r.processed&&r.paid&&<button className="approve-btn" onClick={()=>{if(window.confirm("تفعيل حساب العميل الآن؟")) action(()=>api(`/auth/registrations/${r.id}/approve`,token,{method:"POST"}),"تم اعتماد الاشتراك.")}}><CheckCircle2 size={15}/> اعتماد الاشتراك</button>}
             {r.processed&&<span className="muted">معتمد</span>}
           </div></td></tr>)}</tbody></table></div>{!registrations.length&&<Empty text="لا توجد طلبات تسجيل حالياً."/>}</div>
         </section>}
-        <footer className="footer"><span>SmartNet v1.1.0</span><span>لوحة إدارة الشبكة</span></footer>
+        {page==="monitoring" && <section className="page-section">
+          <div className="section-intro">
+            <div><h2>وكيل مراقبة الشبكة</h2><p className="muted">قراءات فقط، دون أي صلاحية لإرسال أوامر تغيير إلى MikroTik.</p></div>
+            <button className="primary" onClick={collectNetwork}><RefreshCw size={16}/> جمع قراءة الآن</button>
+          </div>
+          <div className="alert warning">وضع الوكيل: قراءة فقط — لا يستطيع إعادة التشغيل أو فصل المستخدمين أو تغيير إعدادات الراوتر.</div>
+          <div className="stats-grid compact">
+            <Stat icon={Router} label="حالة الراوتر" value={networkOverview?.latest?.status || "لا توجد قراءة"}/>
+            <Stat icon={Activity} label="CPU" value={networkOverview?.latest?.cpu_load == null ? "—" : networkOverview.latest.cpu_load + "%"}/>
+            <Stat icon={Users} label="الجلسات النشطة" value={networkOverview?.latest?.active_users_count ?? "—"}/>
+            <Stat icon={ShieldCheck} label="وضع الوكيل" value="قراءة فقط"/>
+          </div>
+          <div className="panel">
+            <div className="panel-head"><h3>آخر القراءات والتنبيهات</h3><span className="muted">{networkMetrics.length} قراءة</span></div>
+            {networkMetrics.length ? <div className="table-wrap"><table><thead><tr><th>الوقت</th><th>الحالة</th><th>CPU</th><th>الذاكرة الحرة</th><th>الجلسات</th><th>التنبيهات</th></tr></thead><tbody>
+              {networkMetrics.slice(0,30).map(item=><tr key={item.id}><td>{item.observed_at ? new Date(item.observed_at).toLocaleString("ar") : "—"}</td><td>{item.status}</td><td>{item.cpu_load ?? "—"}%</td><td>{item.free_memory_bytes ?? "—"}</td><td>{item.active_users_count ?? "—"}</td><td>{(item.alerts || []).join("، ") || "لا توجد"}</td></tr>)}
+            </tbody></table></div> : <Empty text="لا توجد قراءات بعد. استخدم زر جمع قراءة الآن."/>}
+          </div>
+        </section>}
+        {page==="diagnostics" && <section className="page-section">
+          <div className="section-intro"><div><h2>تشخيص الأعطال</h2><p className="muted">يحلل مؤشرات الشبكة ويعرض الأدلة والتوصيات بالاستناد إلى قاعدة معرفة تشغيلية.</p></div><button className="primary" onClick={runDiagnostics}><Activity size={16}/> تشغيل التشخيص</button></div>
+          <div className="alert warning">التشخيص توصياتي فقط. لا ينفذ أوامر على الراوتر ولا يغير الإعدادات.</div>
+          {diagnosis?.findings?.map((finding,index)=><div className="panel" key={finding.knowledge_id || index}>
+            <div className="panel-head"><h3>{finding.title}</h3><span className={finding.severity==="critical"?"status-pill warn":"status-pill"}>{finding.severity}</span></div>
+            <p><b>الأدلة:</b> {(finding.evidence || []).join("، ")}</p>
+            <ol>{(finding.recommended_steps || []).map((step,i)=><li key={i}>{step}</li>)}</ol>
+            {(finding.sources || []).map(source=><p key={source}><a href={source} target="_blank" rel="noreferrer">المصدر الرسمي</a></p>)}
+          </div>)}
+          {!diagnosis && <Empty text="لم يتم تشغيل التشخيص بعد."/>}
+        </section>}
+        {page==="approvals" && <section className="page-section">
+          <div className="section-intro"><div><h2>موافقات عمليات الشبكة</h2><p className="muted">كل طلب صالح لمدة 30 دقيقة. الموافقة لا تتم إلا من مسؤول مخول، مع منع المدير من اعتماد طلبه الشخصي.</p></div><button className="icon-btn" onClick={loadAll}><RefreshCw size={17}/></button></div>
+          <div className="panel"><div className="table-wrap"><table><thead><tr><th>رقم</th><th>العملية</th><th>المستهدف</th><th>مقدم الطلب</th><th>السبب</th><th>الحالة</th><th>الإجراء</th></tr></thead><tbody>
+            {actionRequests.map(request=><tr key={request.id}><td>#{request.id}</td><td>{request.action_type==="reboot"?"إعادة تشغيل":"فصل جلسة"}</td><td>{request.target_user || "—"}</td><td>{request.requested_by}</td><td>{request.reason}</td><td>{request.status}</td><td>{request.status==="pending" ? <div className="row-actions"><button className="approve-btn" onClick={()=>approveNetworkRequest(request.id)}>اعتماد</button><button className="table-action danger" onClick={()=>rejectNetworkRequest(request.id)}>رفض</button></div> : request.result_summary || request.approval_note || "—"}</td></tr>)}
+          </tbody></table></div>{!actionRequests.length && <Empty text="لا توجد طلبات عمليات حالياً."/>}</div>
+        </section>}
+        {page==="reconciliation" && <section className="page-section">
+          <div className="section-intro"><div><h2>المطابقة المالية</h2><p className="muted">مطابقة سجل الاشتراك مع سجل التحقق اليدوي؛ هذا التقرير للقراءة فقط.</p></div><button className="icon-btn" onClick={loadAll}><RefreshCw size={17}/></button></div>
+          <div className="stats-grid compact">
+            <Stat icon={CreditCard} label="بانتظار الدفع" value={reconciliation?.summary?.awaiting_payment ?? "—"}/>
+            <Stat icon={Eye} label="بانتظار مراجعة" value={reconciliation?.summary?.awaiting_review ?? "—"}/>
+            <Stat icon={CheckCircle2} label="مدفوع بانتظار الاعتماد" value={reconciliation?.summary?.verified_pending_approval ?? "—"}/>
+            <Stat icon={AlertTriangle} label="استثناءات" value={reconciliation?.summary?.exceptions ?? "—"}/>
+          </div>
+          <div className="panel"><div className="table-wrap"><table><thead><tr><th>طلب</th><th>المستخدم</th><th>المبلغ المتوقع</th><th>المبلغ الموثق</th><th>المرجع</th><th>الحالة</th></tr></thead><tbody>
+            {(reconciliation?.items || []).map(item=><tr key={item.registration_id}><td>#{item.registration_id}</td><td>{item.username}</td><td>{item.expected_amount} {item.currency}</td><td>{item.verified_amount || "—"}</td><td>{item.payment_reference || "—"}</td><td><span className={item.severity==="critical"?"status-pill warn":"status-pill"}>{item.status}</span></td></tr>)}
+          </tbody></table></div></div>
+        </section>}
+        <footer className="footer"><span>SmartNet v1.2.0</span><span>لوحة إدارة الشبكة</span></footer>
       </div>
     </main>
   </div>;
