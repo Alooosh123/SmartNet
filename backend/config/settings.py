@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     MARIADB_DATABASE: str = "smartnet"
     MARIADB_USER: str = "smartnet"
     MARIADB_PASSWORD: str = ""
+    MARIADB_ROOT_PASSWORD: str = ""
 
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o-mini"
@@ -113,9 +114,11 @@ class Settings(BaseSettings):
             ):
                 raise ValueError("Production must use MariaDB via mysql+asyncmy.")
             if self.DATABASE_BACKEND == "mariadb" and not all([
-                self.MARIADB_HOST, self.MARIADB_DATABASE, self.MARIADB_USER, self.MARIADB_PASSWORD
+                self.MARIADB_HOST, self.MARIADB_DATABASE, self.MARIADB_USER, self.MARIADB_PASSWORD, self.MARIADB_ROOT_PASSWORD
             ]):
                 raise ValueError("MARIADB_HOST, MARIADB_DATABASE, MARIADB_USER and MARIADB_PASSWORD are required.")
+            if len(self.MARIADB_PASSWORD) < 16 or len(self.MARIADB_ROOT_PASSWORD) < 20:
+                raise ValueError("MariaDB application and root passwords must be strong and unique.")
             if self.PAYMENT_PROVIDER_MODE not in {"manual", "gateway"}:
                 raise ValueError("PAYMENT_PROVIDER_MODE must be manual or gateway.")
             if self.PAYMENT_PROVIDER_MODE == "gateway" and not self.PAYMENT_CHECKOUT_URL:
