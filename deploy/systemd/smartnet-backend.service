@@ -12,7 +12,7 @@ WorkingDirectory=/opt/smartnet/backend
 EnvironmentFile=/opt/smartnet/backend/.env
 Environment=PYTHONUNBUFFERED=1
 ExecStartPre=/opt/smartnet/backend/.venv/bin/alembic upgrade head
-ExecStart=/opt/smartnet/backend/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips=127.0.0.1
+ExecStart=/opt/smartnet/backend/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1
 Restart=always
 RestartSec=5
 TimeoutStopSec=30
