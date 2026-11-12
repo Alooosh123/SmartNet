@@ -103,6 +103,12 @@ def _approve_manually(client, admin_headers, registration):
     response = client.post(
         f"/auth/registrations/{registration['registration_id']}/verify-manual",
         headers=admin_headers,
+        json={
+            "amount": registration["price"],
+            "currency": registration.get("currency", "USD"),
+            "external_reference": f"E2E-TRANSFER-{registration['registration_id']}",
+            "notes": "Controlled isolated end-to-end test transfer",
+        },
     )
     assert response.status_code == 200, response.text
     assert response.json()["paid"] is True
@@ -163,6 +169,14 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
     receipt_response = client.get(receipt_item["receipt_image"], headers=admin_headers)
     assert receipt_response.status_code == 200
     assert receipt_response.content.startswith(b"\x89PNG")
+
+    # Wrong amount must fail closed; valid manual verification is a separate step.
+    wrong_amount = client.post(
+        f"/auth/registrations/{registration['registration_id']}/verify-manual",
+        headers=admin_headers,
+        json={"amount": registration["price"] + 1, "currency": "USD", "external_reference": "E2E-WRONG-AMOUNT"},
+    )
+    assert wrong_amount.status_code == 400
 
     _approve_manually(client, admin_headers, registration)
 
@@ -236,6 +250,12 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
         "E2E-second-password-2026!",
         "semi_annual",
     )
+    duplicate_reference = client.post(
+        f"/auth/registrations/{second['registration_id']}/verify-manual",
+        headers=admin_headers,
+        json={"amount": second["price"], "currency": "USD", "external_reference": f"E2E-TRANSFER-{registration['registration_id']}"},
+    )
+    assert duplicate_reference.status_code == 409
     _approve_manually(client, admin_headers, second)
     second_token = _login(client, "e2e-semi-customer", "E2E-second-password-2026!")
     second_headers = {"Authorization": f"Bearer {second_token}"}
@@ -256,3 +276,36 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
     monthly_token = _login(client, "e2e-monthly-customer", "E2E-monthly-password-2026!")
     monthly_headers = {"Authorization": f"Bearer {monthly_token}"}
     assert client.get("/cards/batches", headers=monthly_headers).status_code == 403
+
+    # A customer may request a protected network operation but cannot approve
+    # or execute it; an administrator must review and execute it separately.
+    reboot_request = client.post("/mikrotik/reboot", headers=customer_headers)
+    assert reboot_request.status_code == 202
+    operation_id = reboot_request.json()["operation_id"]
+    assert reboot_request.json()["status"] == "pending"
+    unapproved_execute = client.post(f"/mikrotik/operations/{operation_id}/execute", headers=admin_headers)
+    assert unapproved_execute.status_code == 409
+    approved = client.post(f"/mikrotik/operations/{operation_id}/approve", headers=admin_headers, json={"note": "E2E approval"})
+    assert approved.status_code == 200
+    executed = client.post(f"/mikrotik/operations/{operation_id}/execute", headers=admin_headers)
+    assert executed.status_code == 200
+    assert executed.json()["status"] == "executed"
+    duplicate_execute = client.post(f"/mikrotik/operations/{operation_id}/execute", headers=admin_headers)
+    assert duplicate_execute.status_code == 409
+
+    # Monthly users may not request reboot. Admin self-approval is prohibited
+    # for high-impact reboot requests.
+    forbidden_reboot = client.post("/mikrotik/reboot", headers=monthly_headers)
+    assert forbidden_reboot.status_code == 403
+    admin_reboot_request = client.post("/mikrotik/reboot", headers=admin_headers)
+    assert admin_reboot_request.status_code == 202
+    admin_self_approval = client.post(
+        f"/mikrotik/operations/{admin_reboot_request.json()['operation_id']}/approve",
+        headers=admin_headers,
+        json={"note": "Must be rejected"},
+    )
+    assert admin_self_approval.status_code == 409
+
+    reconciliation = client.get("/auth/payments/reconciliation", headers=admin_headers)
+    assert reconciliation.status_code == 200
+    assert reconciliation.json()["anomaly_count"] == 0
