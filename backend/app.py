@@ -4,8 +4,9 @@ from pathlib import Path
 import asyncio
 import logging
 import shutil
+import hmac
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Header, HTTPException
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -19,7 +20,6 @@ from database import models
 from services.auth_service import auth_service
 from services.subscription_agent import subscription_agent_loop
 from services.network_monitor_agent import network_monitor_loop
-from api.dependencies import get_current_admin
 from api.routes import auth, mikrotik, cards, client
 
 logger = logging.getLogger(__name__)
@@ -219,8 +219,11 @@ async def readiness_check():
 
 
 @app.get("/api/metrics")
-async def metrics_endpoint(current_admin=Depends(get_current_admin)):
+async def metrics_endpoint(authorization: str | None = Header(default=None)):
+    """Private Prometheus scrape endpoint, authenticated by a separate machine token."""
     if not settings.METRICS_ENABLED:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Metrics endpoint is disabled.")
+    expected = f"Bearer {settings.METRICS_TOKEN}"
+    if not settings.METRICS_TOKEN or not authorization or not hmac.compare_digest(authorization, expected):
+        raise HTTPException(status_code=401, detail="Metrics access denied.")
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
