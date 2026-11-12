@@ -171,7 +171,18 @@ def test_full_customer_registration_to_payment_approval_chat_and_card_pdf(smartn
     assert receipt_response.status_code == 200
     assert receipt_response.content.startswith(b"\x89PNG")
 
-    _approve_manually(client, admin_headers, registration)
+    mismatch = client.post(
+        f"/auth/registrations/{registration['registration_id']}/verify-manual",
+        headers=admin_headers,
+        json={
+            "payment_reference": "bankref-amount-mismatch",
+            "amount": "99.99",
+            "currency": "USD",
+            "note": "This amount is intentionally incorrect",
+        },
+    )
+    assert mismatch.status_code == 400
+    _approve_manually(client, admin_headers, registration, payment_reference="bankref-shared-unique")
 
     approved_status = client.get(
         f"/auth/registrations/{registration['registration_id']}/status",
