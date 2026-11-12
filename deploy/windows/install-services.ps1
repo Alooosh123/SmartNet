@@ -3,7 +3,7 @@ $serviceDir = Join-Path $PSScriptRoot ""
 $required = @(
     (Join-Path $serviceDir "smartnet-backend.exe"),
     (Join-Path $serviceDir "smartnet-backend.xml"),
-    (Join-Path $serviceDir "smartnet-caddy.exe"),
+    (Join-Path $serviceDir "caddy-service.exe"),
     (Join-Path $serviceDir "caddy-service.xml")
 )
 foreach ($file in $required) {
