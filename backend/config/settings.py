@@ -116,16 +116,26 @@ class Settings(BaseSettings):
                 raise ValueError("MikroTik monitor and operator passwords must each contain at least 16 characters.")
             if not self.MIKROTIK_USE_SSL or not self.MIKROTIK_SSL_VERIFY or not self.MIKROTIK_SSL_VERIFY_HOSTNAME:
                 raise ValueError("Production MikroTik connections must use verified TLS.")
-            if self.DATABASE_BACKEND != "mariadb" and not (
-                self.DATABASE_URL and self.DATABASE_URL.startswith("mysql+asyncmy://")
-            ):
-                raise ValueError("Production must use MariaDB via mysql+asyncmy.")
-            if self.DATABASE_BACKEND == "mariadb" and not all([
+            if self.DATABASE_BACKEND != "mariadb":
+                raise ValueError("Production must use MariaDB via DATABASE_BACKEND=mariadb.")
+            if self.DATABASE_URL and not self.DATABASE_URL.startswith("mysql+asyncmy://"):
+                raise ValueError("When set, DATABASE_URL must use the mysql+asyncmy dialect.")
+            if not all([
                 self.MARIADB_HOST, self.MARIADB_DATABASE, self.MARIADB_USER, self.MARIADB_PASSWORD
             ]):
                 raise ValueError("MARIADB_HOST, MARIADB_DATABASE, MARIADB_USER and MARIADB_PASSWORD are required.")
-            if len(self.MARIADB_PASSWORD) < 16 or self.MARIADB_PASSWORD.startswith("dev-only-") or self.MARIADB_PASSWORD.lower() in {"password", "changeme", "smartnet"}:
-                raise ValueError("MariaDB application and root passwords must be strong and unique.")
+            weak_db_passwords = [
+                name for name, value, minimum in (
+                    ("MARIADB_PASSWORD", self.MARIADB_PASSWORD, 16),
+                    ("MARIADB_ROOT_PASSWORD", self.MARIADB_ROOT_PASSWORD, 20),
+                )
+                if not value or len(value) < minimum or value.startswith("dev-only-")
+                or value.lower() in {"password", "changeme", "smartnet"}
+            ]
+            if weak_db_passwords:
+                raise ValueError("Weak or missing MariaDB secrets: " + ", ".join(weak_db_passwords))
+            if self.MARIADB_PASSWORD == self.MARIADB_ROOT_PASSWORD:
+                raise ValueError("MariaDB application and root passwords must be different.")
             if self.METRICS_ENABLED and len(self.METRICS_TOKEN) < 32:
                 raise ValueError("METRICS_TOKEN must contain at least 32 characters when metrics are enabled.")
             if self.PAYMENT_PROVIDER_MODE != "manual":
