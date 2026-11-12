@@ -129,9 +129,12 @@ async def test_network_monitor_resolves_recovered_router_and_prunes_old_snapshot
 
         await network_monitor_agent.collect_network_snapshot(session)
 
-        refreshed_alert = await session.get(models.NetworkAlert, alert_id)
-        deleted_snapshot = await session.get(models.NetworkSnapshot, snapshot_id)
-        assert refreshed_alert is not None and refreshed_alert.active is False
-        assert deleted_snapshot is None
+        # Verify through a fresh identity map; bulk DELETE intentionally uses
+        # synchronize_session=False for bounded-cost pruning.
+        async with session_factory() as verification_session:
+            refreshed_alert = await verification_session.get(models.NetworkAlert, alert_id)
+            deleted_snapshot = await verification_session.get(models.NetworkSnapshot, snapshot_id)
+            assert refreshed_alert is not None and refreshed_alert.active is False
+            assert deleted_snapshot is None
 
     await engine.dispose()
