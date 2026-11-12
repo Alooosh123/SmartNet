@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String(255), DateTime, Boolean, ForeignKey, Text, BigInteger, Numeric
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, BigInteger, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database.database import Base
@@ -35,7 +35,7 @@ class Card(Base):
 class RegistrationRequest(Base):
     __tablename__ = "registration_requests"
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(255), unique=True, index=True, nullable=False)
+    username = Column(String(128), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     plan = Column(String(32), default="monthly", nullable=True)
     price = Column(Integer, default=20, nullable=True)
@@ -52,7 +52,7 @@ class Client(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
-    plan = Column(String(255), default="monthly", nullable=True)
+    plan = Column(String(32), default="monthly", nullable=True)
     can_reboot_network = Column(Boolean, default=False, nullable=True)
     is_active = Column(Boolean, default=True)
     subscription_expires = Column(DateTime(timezone=True), nullable=True)
