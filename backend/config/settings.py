@@ -97,6 +97,8 @@ class Settings(BaseSettings):
                     raise ValueError("Read-only MikroTik API credentials are required when the Network Observer is enabled.")
                 if self.MIKROTIK_READONLY_USERNAME == self.MIKROTIK_USERNAME:
                     raise ValueError("Use a separate read-only MikroTik account for network monitoring.")
+                if self.MIKROTIK_READONLY_PASSWORD == self.MIKROTIK_PASSWORD:
+                    raise ValueError("Use a different password for the read-only MikroTik account.")
                 if not 1 <= self.MIKROTIK_READONLY_PORT <= 65535:
                     raise ValueError("MIKROTIK_READONLY_PORT must be a valid TCP port.")
             if not self.DATABASE_URL.startswith("mysql+asyncmy://"):
