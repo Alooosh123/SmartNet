@@ -16,13 +16,15 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 DEST="${1:-$ROOT_DIR/backups}"
 mkdir -p "$DEST"
 chmod 700 "$DEST"
+podman inspect smartnet-mariadb >/dev/null
+podman inspect smartnet-backend >/dev/null
 
-podman-compose -f podman-compose.yml exec -T mariadb \
+podman exec smartnet-mariadb \
   mariadb-dump --single-transaction --routines --triggers \
   -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE" \
   | gzip -9 > "$DEST/smartnet-db-$STAMP.sql.gz"
 
-podman-compose -f podman-compose.yml exec -T backend \
+podman exec smartnet-backend \
   tar -czf - -C /app/backend uploads > "$DEST/smartnet-uploads-$STAMP.tar.gz"
 
 (
