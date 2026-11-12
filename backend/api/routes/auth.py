@@ -212,6 +212,53 @@ async def setup_initial_admin(admin_in: schemas.AdminCreate, db: AsyncSession = 
     return {"msg": "Admin created successfully."}
 
 
+@router.get("/admins", response_model=list[schemas.AdminResponse])
+async def list_administrators(
+    db: AsyncSession = Depends(database.get_db),
+    current_admin=Depends(get_current_admin),
+):
+    result = await db.execute(select(models.Admin).order_by(models.Admin.id.asc()))
+    return result.scalars().all()
+
+
+@router.post("/admins", response_model=schemas.AdminResponse)
+async def create_administrator(
+    payload: schemas.AdminCreate,
+    db: AsyncSession = Depends(database.get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """Provision a second named administrator for dual-control approvals."""
+    username = payload.username.strip()
+    if len(username) < 3:
+        raise HTTPException(status_code=400, detail="اسم المدير يجب أن يكون 3 أحرف على الأقل")
+    if len(payload.password) < 12:
+        raise HTTPException(status_code=400, detail="كلمة مرور المدير يجب أن تكون 12 حرفاً على الأقل")
+    existing_admin = await db.execute(select(models.Admin).where(models.Admin.username == username))
+    if existing_admin.scalars().first():
+        raise HTTPException(status_code=409, detail="اسم المدير مستخدم بالفعل")
+    existing_client = await db.execute(select(models.Client).where(models.Client.username == username))
+    if existing_client.scalars().first():
+        raise HTTPException(status_code=409, detail="اسم المستخدم مسجل كعميل")
+    pending = await db.execute(select(models.RegistrationRequest).where(models.RegistrationRequest.username == username))
+    if pending.scalars().first():
+        raise HTTPException(status_code=409, detail="يوجد طلب اشتراك بهذا الاسم")
+
+    administrator = models.Admin(
+        username=username,
+        hashed_password=auth_service.get_password_hash(payload.password),
+        is_active=True,
+    )
+    db.add(administrator)
+    db.add(models.AuditLog(
+        action="administrator_created",
+        performed_by=getattr(current_admin, "username", "admin"),
+        details=f"Created administrator account '{username}' for dual-control administration.",
+    ))
+    await db.commit()
+    await db.refresh(administrator)
+    return administrator
+
+
 @router.post('/register')
 async def register_user(payload: RegistrationCreate, db: AsyncSession = Depends(database.get_db)):
     """Save a registration request (pending) with chosen plan and return a payment URL."""
