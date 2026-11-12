@@ -208,7 +208,9 @@ async def reject_network_operation(
     current_admin=Depends(get_current_admin),
 ):
     row = (await db.execute(
-        select(models.NetworkOperation).where(models.NetworkOperation.id == operation_id)
+        select(models.NetworkOperation)
+        .where(models.NetworkOperation.id == operation_id)
+        .with_for_update()
     )).scalars().first()
     if row is None:
         raise HTTPException(status_code=404, detail="طلب العملية غير موجود.")
@@ -234,8 +236,12 @@ async def execute_network_operation(
     db: AsyncSession = Depends(database.get_db),
     current_admin=Depends(get_current_admin),
 ):
+    # Lock the approval row while checking and claiming execution. This ensures
+    # concurrent administrators cannot both dispatch the same RouterOS command.
     row = (await db.execute(
-        select(models.NetworkOperation).where(models.NetworkOperation.id == operation_id)
+        select(models.NetworkOperation)
+        .where(models.NetworkOperation.id == operation_id)
+        .with_for_update()
     )).scalars().first()
     if row is None:
         raise HTTPException(status_code=404, detail="طلب العملية غير موجود.")
@@ -329,7 +335,7 @@ async def list_network_alerts(
 @router.post("/diagnose")
 async def diagnose_network(
     payload: DiagnosticRequest,
-    current_user: dict = Depends(get_current_user),
+    current_admin=Depends(get_current_admin),
 ):
     from services.diagnostics_agent import diagnose
     return await diagnose(payload.question)
