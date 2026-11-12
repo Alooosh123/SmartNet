@@ -7,8 +7,8 @@ fi
 backup="$2"
 [[ -f "$backup" ]] || { echo "Backup file not found: $backup" >&2; exit 2; }
 : "${MARIADB_DATABASE:?Set MARIADB_DATABASE}"
-: "${MARIADB_USER:?Set MARIADB_USER}"
-: "${MARIADB_PASSWORD:?Set MARIADB_PASSWORD}"
+: "${MARIADB_RESTORE_USER:?Set MARIADB_RESTORE_USER}"
+: "${MARIADB_RESTORE_PASSWORD:?Set MARIADB_RESTORE_PASSWORD}"
 MARIADB_HOST="${MARIADB_HOST:-127.0.0.1}"
 MARIADB_PORT="${MARIADB_PORT:-3306}"
 credentials="$(mktemp)"
@@ -16,8 +16,8 @@ trap 'rm -f "$credentials"' EXIT
 chmod 600 "$credentials"
 cat > "$credentials" <<EOF
 [client]
-user=$MARIADB_USER
-password=$MARIADB_PASSWORD
+user=$MARIADB_RESTORE_USER
+password=$MARIADB_RESTORE_PASSWORD
 host=$MARIADB_HOST
 port=$MARIADB_PORT
 protocol=tcp
