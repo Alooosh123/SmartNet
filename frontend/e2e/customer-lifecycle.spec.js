@@ -41,7 +41,18 @@ test("customer registration -> manual review -> activation -> portal -> chat -> 
   await expect(requestRow).toBeVisible();
   await expect(requestRow.getByText("بانتظار الدفع")).toBeVisible();
 
-  adminPage.on("dialog", dialog => dialog.accept());
+  const paymentPrompts = [
+    "bankref-browser-e2e",
+    "100",
+    "Verified against isolated statement fixture",
+  ];
+  adminPage.on("dialog", async dialog => {
+    if (dialog.type() === "prompt") {
+      await dialog.accept(paymentPrompts.shift() || "Additional verification note");
+    } else {
+      await dialog.accept();
+    }
+  });
   await requestRow.getByRole("button", { name: "تأكيد وصول المبلغ" }).click();
   await expect(requestRow.getByRole("button", { name: "اعتماد الاشتراك" })).toBeVisible();
   await requestRow.getByRole("button", { name: "اعتماد الاشتراك" }).click();
