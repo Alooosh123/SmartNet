@@ -313,6 +313,17 @@ function App() {
     await action(() => api(path, token, options), message);
   }
 
+  async function createAdministrator() {
+    const adminUsername = window.prompt("اسم حساب المدير الجديد:");
+    if (!adminUsername?.trim()) return;
+    const adminPassword = window.prompt("كلمة مرور قوية للمدير الجديد (12 حرفاً على الأقل):");
+    if (!adminPassword) return;
+    await action(() => api("/auth/admins", token, {
+      method: "POST",
+      body: JSON.stringify({ username: adminUsername.trim(), password: adminPassword }),
+    }), "تم إنشاء حساب المدير. يمكنه الآن مراجعة طلبات المديرين الآخرين.");
+  }
+
   const operationLabel = actionName => actionName === "reboot_router" ? "إعادة تشغيل الراوتر"
     : actionName === "disconnect_user" ? "فصل مستخدم" : actionName;
   const operationStatus = value => ({
@@ -512,7 +523,7 @@ function App() {
         </section>}
 
         {page==="operations" && <section className="page-section">
-          <div className="section-intro"><div><h2>موافقات عمليات الشبكة</h2><p className="muted">لا يُنفّذ الفصل أو إعادة التشغيل إلا بعد تسجيل الطلب ومراجعته ثم تنفيذ معتمد.</p></div><button className="secondary" onClick={loadAll}><RefreshCw size={16}/> تحديث</button></div>
+          <div className="section-intro"><div><h2>موافقات عمليات الشبكة</h2><p className="muted">لا يُنفّذ الفصل أو إعادة التشغيل إلا بعد تسجيل الطلب ومراجعته ثم تنفيذ معتمد. طلب إعادة التشغيل يتطلب مديراً ثانياً.</p></div><div className="row-actions"><button className="secondary" onClick={createAdministrator}>إضافة مدير</button><button className="secondary" onClick={loadAll}><RefreshCw size={16}/> تحديث</button></div></div>
           <div className="panel">
             {operations.length ? <div className="table-wrap"><table><thead><tr><th>الطلب</th><th>الهدف</th><th>مقدم الطلب</th><th>المراجع</th><th>الحالة</th><th>الإجراء</th></tr></thead><tbody>
               {operations.map(op=><tr key={op.id}>
