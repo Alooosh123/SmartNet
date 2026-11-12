@@ -43,11 +43,14 @@ async def test_network_monitor_collects_read_only_snapshot_and_threshold_alerts(
         snapshot = await network_monitor_agent.collect_network_snapshot(session)
         assert snapshot.cpu_load == 92
         assert snapshot.active_users == 3
+        # Repeated collection during an active incident must not create duplicate rows.
+        await network_monitor_agent.collect_network_snapshot(session)
         alerts = (await session.execute(
             select(models.NetworkAlert).where(models.NetworkAlert.active.is_(True))
         )).scalars().all()
         codes = {item.code for item in alerts}
         assert {"router_cpu_high", "active_users_high"}.issubset(codes)
+        assert len(alerts) == 2
 
     await engine.dispose()
 
