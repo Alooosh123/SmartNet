@@ -25,7 +25,7 @@ Do not change a PostgreSQL connection string to MariaDB and assume data has migr
 - MIGRATION_DATABASE_URL=mysql+asyncmy://... with a dedicated DDL account, separate from the runtime account.
 - PAYMENT_PROVIDER_MODE=manual until a provider-specific adapter is implemented and validated.
 - PAYMENT_DEMO_MODE=false.
-- MIKROTIK_DEMO_MODE=false, with separate operational and read-only RouterOS accounts/passwords reachable only over VPN/private management network. Observer account must have read+api policies only.
+- MIKROTIK_DEMO_MODE=false, with separate operational and read-only RouterOS accounts/passwords reachable only over VPN/private management network. Use API-SSL on port 8729 by default; SmartNet enforces TLS certificate-chain and hostname validation. Configure a RouterOS certificate whose SAN matches MIKROTIK_HOST, and set MIKROTIK_TLS_CA_FILE only when a private CA must be trusted. Never use unencrypted API port 8728 for production credentials. Observer account must have read+api policies only.
 - Exact HTTPS CORS_ORIGINS.
 - MARIADB_* backup environment variables.
 - NETWORK_OBSERVER_ENABLED=true and reviewed thresholds.
@@ -55,7 +55,7 @@ Until official provider API docs and sandbox/live credentials are supplied, use 
 6. Use the financial report and normalized CSV upload to identify matched, mismatched, external-only and internal-only records. CSV reconciliation is read-only and does not activate accounts.
 Receipt images alone never count as payment. A real gateway needs a provider-specific adapter validating signatures, event IDs, settlement, registration reference, amount and currency.
 
-## Network operations and agents
+## Live MikroTik read-only acceptance\nFrom the backend directory, after configuring the real read-only account and trusted RouterOS certificate, run:\n\n~~~bash\npython scripts/mikrotik_readonly_acceptance.py\n~~~\n\nThe command refuses demo mode, uses API-SSL with certificate and hostname verification, prints only router aggregates and active-session count, and performs no mutations. Compare board/version, CPU, free memory and session count with Winbox. Only then use a spare HotSpot profile/account for card-creation and disconnect acceptance. Test reboot separately during a maintenance window.\n\n## Network operations and agents
 - Network Observer reads RouterOS resources and active sessions only; it stores aggregate metrics and does not write to RouterOS.
 - Diagnostic agent uses observations and a curated MikroTik reference file; optional OpenAI adds natural-language summarization, with no RouterOS action tools.
 - Annual/semi-annual customers can request permitted operations; network-changing customer actions require administrator review before execution.
