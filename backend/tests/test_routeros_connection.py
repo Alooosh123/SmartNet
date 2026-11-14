@@ -34,7 +34,11 @@ def test_routeros_connection_always_uses_tls_and_verifies_certificate_and_hostna
 def test_routeros_connection_uses_custom_ca_without_disabling_verification(tmp_path, monkeypatch):
     ca_file = tmp_path / "router-ca.pem"
     ca_file.write_text("test CA placeholder", encoding="utf-8")
-    context = ssl.create_default_context()
+    context = SimpleNamespace(
+        check_hostname=False,
+        verify_mode=ssl.CERT_NONE,
+        load_verify_locations=Mock(),
+    )
     context_factory = Mock(return_value=context)
     pool_factory = Mock(return_value=object())
     monkeypatch.setattr(routeros_connection.ssl, "create_default_context", context_factory)
@@ -48,7 +52,8 @@ def test_routeros_connection_uses_custom_ca_without_disabling_verification(tmp_p
         port=8729,
     )
 
-    context_factory.assert_called_once_with(cafile=str(ca_file))
+    context_factory.assert_called_once_with()
+    context.load_verify_locations.assert_called_once_with(cafile=str(ca_file))
     assert context.check_hostname is True
     assert context.verify_mode == ssl.CERT_REQUIRED
     assert pool_factory.call_args.kwargs["ssl_context"] is context
