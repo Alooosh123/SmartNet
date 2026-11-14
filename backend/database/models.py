@@ -196,6 +196,7 @@ class WalletPaymentIntent(Base):
     receiving_wallet_id = Column(Integer, ForeignKey("receiving_wallet_accounts.id"), nullable=False)
     intent_type = Column(String(24), nullable=False)
     plan = Column(String(40), nullable=False)
+    duration_days = Column(Integer, nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String(3), nullable=False)
     reference_token = Column(String(80), nullable=False)
