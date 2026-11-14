@@ -653,6 +653,12 @@ async def _create_payment_intent(
         raise HTTPException(status_code=400, detail="يجب أن تكون محفظة المرسل والاستقبال من المزود نفسه.")
     if payer.status == "revoked":
         raise HTTPException(status_code=403, detail="هوية محفظة المرسل ملغاة.")
+    plan_info = PLANS.get(plan)
+    if not plan_info:
+        raise HTTPException(status_code=400, detail="الباقة المطلوبة غير متاحة.")
+    duration_days = int(plan_info["days"])
+    if duration_days < 1 or duration_days > 3650:
+        raise HTTPException(status_code=400, detail="مدة الباقة خارج النطاق المسموح.")
     if registration:
         if payer.registration_id != registration.id or payer.client_id is not None:
             raise HTTPException(status_code=403, detail="هوية المحفظة لا تتبع طلب التسجيل.")
@@ -664,9 +670,7 @@ async def _create_payment_intent(
     else:
         if payer.client_id != client.id or payer.status not in {"active", "pending_approval"}:
             raise HTTPException(status_code=403, detail="هوية محفظة المرسل غير مرتبطة بحسابك أو ملغاة.")
-        if plan not in PLANS:
-            raise HTTPException(status_code=400, detail="الباقة المطلوبة غير متاحة.")
-        amount = Decimal(str(PLANS[plan]["price"])).quantize(Decimal("0.01"))
+        amount = Decimal(str(plan_info["price"])).quantize(Decimal("0.01"))
         currency = "USD"
         intent_type = "renewal"
         client_id = client.id
@@ -682,6 +686,7 @@ async def _create_payment_intent(
         receiving_wallet_id=receiving.id,
         intent_type=intent_type,
         plan=plan,
+        duration_days=duration_days,
         amount=amount,
         currency=currency,
         reference_token=f"SN-{secrets.token_hex(10).upper()}",
