@@ -11,3 +11,7 @@ def test_fastapi_application_imports_and_exposes_core_routes():
     assert "/client/chat" in paths
     assert "/mikrotik/status" in paths
     assert "/cards/generate" in paths
+    assert "/api/v1/wallet-monitor/device/events" in paths
+    assert "/api/v1/wallet-monitor/device/heartbeat" in paths
+    assert "/api/v1/wallet-monitor/admin/providers" in paths
+    assert "/api/v1/wallet-monitor/me/payment-intents" in paths
