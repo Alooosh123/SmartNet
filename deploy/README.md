@@ -149,15 +149,15 @@ Windows: start MariaDB first. Then install and start the two WinSW services. The
 
 ## 7. Real MikroTik acceptance
 
-Set MIKROTIK_DEMO_MODE=false and route traffic over a private management network or VPN. Keep RouterOS API 8728/8729 inaccessible from the public internet.
+Set MIKROTIK_DEMO_MODE=false and route traffic over a private management network or VPN. SmartNet uses API-SSL with TLS certificate-chain and hostname verification enabled; default to TCP 8729. Do not configure production credentials over unencrypted API TCP 8728, and keep both ports inaccessible from the public internet.
 
 Configure two separate RouterOS API accounts:
 - Operational account (MIKROTIK_USERNAME / MIKROTIK_PASSWORD): used only by administrator-approved commands such as HotSpot user create/disconnect and router reboot. Grant only the required RouterOS policies and validate them on a test router first.
 - Observer account (MIKROTIK_READONLY_USERNAME / MIKROTIK_READONLY_PASSWORD, optionally separate host/port): used by Network Observer and aggregate status endpoint. Assign RouterOS read and api policies only; do not grant write, policy, reboot, password or other administrative policies. The application refuses production configuration when observer username/password are reused from the operational account.
 
-Set MIKROTIK_READONLY_HOST only when the read-only account is exposed on a different management endpoint; otherwise it uses MIKROTIK_HOST. Both accounts must have distinct high-entropy passwords and be reachable only over VPN/private management network.
+Set MIKROTIK_READONLY_HOST only when the read-only account is exposed on a different management endpoint; otherwise it uses MIKROTIK_HOST. Both accounts must have distinct high-entropy passwords and be reachable only over VPN/private management network. Configure a certificate on RouterOS API-SSL with a SAN matching the exact MIKROTIK_HOST hostname/IP. SmartNet verifies the certificate and hostname; if the device uses a private CA, set MIKROTIK_TLS_CA_FILE to a protected PEM CA bundle readable by the backend service account. Do not disable TLS verification to bypass an invalid or mismatched certificate.
 
-First acceptance checks should be read-only:
+Before the HTTP acceptance checks, run the direct, read-only client probe from the backend directory:\n\n~~~bash\npython scripts/mikrotik_readonly_acceptance.py\n~~~\n\nIt refuses demo mode, connects only with API-SSL and prints aggregate router metadata/session count without subscriber identities. A successful probe is required before continuing.\n\nFirst HTTP acceptance checks should be read-only:
 1. GET /api/health/ready
 2. GET /mikrotik/status
 3. Admin-only GET /mikrotik/users
