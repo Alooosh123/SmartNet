@@ -40,8 +40,9 @@ def create_routeros_connection(*, host: str, username: str, password: str, port:
         ca_path = Path(ca_file).expanduser()
         if not ca_path.is_file():
             raise RuntimeError("MIKROTIK_TLS_CA_FILE does not point to a readable CA certificate file.")
-        context = ssl.create_default_context(cafile=str(ca_path))
-        # Keep these requirements explicit even when a custom CA is supplied.
+        context = ssl.create_default_context()
+        context.load_verify_locations(cafile=str(ca_path))
+        # Extend system trust with the private CA; never relax either check.
         context.check_hostname = True
         context.verify_mode = ssl.CERT_REQUIRED
         options["ssl_context"] = context
