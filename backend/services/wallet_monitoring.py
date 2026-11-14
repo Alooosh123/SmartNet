@@ -33,20 +33,25 @@ _PARSERS: dict[str, Parser] = {}
 
 
 def normalize_wallet_identifier(value: str) -> str:
-    """Normalize Arabic/Latin digits and separators without guessing country codes."""
+    """Normalize Arabic/Latin digits and safe separators; reject ambiguous input."""
     normalized = unicodedata.normalize("NFKC", value or "").strip()
     digits = []
     for char in normalized:
+        if char.isspace() or char in "-().":
+            continue
+        if char == "+":
+            if digits:
+                raise ValueError("Plus sign is allowed only at the start of a wallet identifier.")
+            digits.append("+")
+            continue
         try:
             digits.append(str(unicodedata.digit(char)))
-        except (TypeError, ValueError):
-            if char == "+" and not digits:
-                digits.append(char)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Wallet identifier contains an unsupported character.") from exc
     result = "".join(digits)
     if not re.fullmatch(r"\+?\d{6,24}", result):
         raise ValueError("Wallet identifier must contain 6 to 24 digits.")
     return result
-
 
 def wallet_fingerprint(value: str) -> str:
     secret = settings.WALLET_IDENTITY_HMAC_SECRET
