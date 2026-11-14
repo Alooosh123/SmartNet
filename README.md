@@ -8,7 +8,7 @@ SmartNet نظام عربي لإدارة اشتراكات Hotspot على MikroTik
 - Backend: Python 3.11+ وFastAPI وSQLAlchemy async.
 - Frontend: React وVite، واجهة عربية RTL.
 - Database: SQLite للتطوير المحلي فقط، وMariaDB 11.8 LTS للإنتاج.
-- Router integration: MikroTik RouterOS API عبر شبكة إدارة خاصة أو VPN.
+- Router integration: MikroTik RouterOS API-SSL عبر شبكة إدارة خاصة أو VPN، مع تحقق إلزامي من شهادة TLS واسم المضيف (المنفذ الافتراضي 8729).
 - Edge / HTTPS: Caddy، دون Docker أو Docker Compose.
 - Operations: خدمات Windows/Linux، Alembic، نسخ احتياطي واستعادة.
 - AI: مساعد دعم العميل، وكيل مراقبة شبكة للقراءة فقط، ووكيل تشخيص يعتمد قاعدة معرفة MikroTik.
@@ -67,7 +67,7 @@ npm run test:e2e
 
 **مهم:** إذا كانت لديك قاعدة PostgreSQL قديمة تحتوي بيانات حقيقية، فلا تغيّر DATABASE_URL مباشرة. يجب تصدير البيانات وتحويلها والتحقق من العلاقات والملفات في نسخة MariaDB تجريبية أولاً. دليل النشر يوضح أن هذا الانتقال ليس تلقائياً.
 
-## الدفع اليدوي التشغيلي
+## قبول اتصال MikroTik الحقيقي (قراءة فقط أولاً)\nبعد إعداد شهادة API-SSL على RouterOS بحيث يطابق SAN اسم المضيف في MIKROTIK_HOST، وإعداد حساب المراقبة المنفصل، شغّل من مجلد backend:\n\n~~~powershell\npython scripts/mikrotik_readonly_acceptance.py\n~~~\n\nيستخدم الفحص API-SSL ويتحقق من سلسلة الشهادة واسم المضيف، ويعرض بيانات مجمعة وعدد الجلسات فقط دون أسماء أو عناوين المشتركين، ولا ينفذ أي تعديل. عند استخدام CA خاص، عيّن MIKROTIK_TLS_CA_FILE إلى ملف PEM موثوق. لا تستخدم API غير المشفر على المنفذ 8728 في الإنتاج.\n\n## الدفع اليدوي التشغيلي
 
 الوضع المعتمد ما لم يتم توصيل مزود موثق هو PAYMENT_PROVIDER_MODE=manual:
 1. ينشئ العميل طلب الاشتراك ويرفع الإيصال الاختياري.
