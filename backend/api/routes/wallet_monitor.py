@@ -200,7 +200,16 @@ async def _create_payer_identity(
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="رقم المحفظة مسجل مسبقاً لدى هذا المزود.")
-    return identity
+    return {
+        "id": identity.id,
+        "provider_id": identity.provider_id,
+        "client_id": identity.client_id,
+        "registration_id": identity.registration_id,
+        "masked_phone": identity.masked_phone,
+        "owner_name": identity.owner_name,
+        "status": identity.status,
+        "created_at": identity.created_at,
+    }
 
 
 @router.post("/admin/providers")
