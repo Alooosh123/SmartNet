@@ -187,6 +187,14 @@ def test_wallet_device_registration_identity_and_event_intake(wallet_api):
     provider_id = provider.json()["id"]
     assert provider.json()["auto_verification_enabled"] is False
 
+    package_update = client.put(
+        f"/api/v1/wallet-monitor/admin/providers/{provider_id}/packages",
+        headers=admin_headers,
+        json={"package_names": ["com.example.jaib"]},
+    )
+    assert package_update.status_code == 200, package_update.text
+    assert package_update.json()["package_names"] == ["com.example.jaib"]
+
     device_response = client.post(
         "/api/v1/wallet-monitor/admin/devices",
         headers=admin_headers,
