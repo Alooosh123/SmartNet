@@ -6,6 +6,7 @@ intake, masked identity handling and the fail-closed adapter state.
 """
 import asyncio
 import hashlib
+from decimal import Decimal
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,8 +22,10 @@ from database import models
 from database.database import Base
 from services.auth_service import auth_service
 from services.wallet_monitoring import (
+    ParsedWalletTransfer,
     mask_wallet_identifier,
     normalize_wallet_identifier,
+    register_notification_parser,
     wallet_fingerprint,
 )
 
@@ -182,13 +185,6 @@ def test_wallet_device_registration_identity_and_event_intake(wallet_api):
     assert intent.json()["currency"] == "USD"
     assert intent.json()["automatic_activation"] is False
 
-    identity_approval = client.post(
-        f"/api/v1/wallet-monitor/admin/payer-wallets/{payer_id}/approve",
-        headers=admin_headers,
-    )
-    assert identity_approval.status_code == 200, identity_approval.text
-    assert identity_approval.json()["status"] == "active"
-
     heartbeat = client.post(
         "/api/v1/wallet-monitor/device/heartbeat",
         headers=device_headers,
@@ -196,6 +192,20 @@ def test_wallet_device_registration_identity_and_event_intake(wallet_api):
     )
     assert heartbeat.status_code == 200, heartbeat.text
     assert heartbeat.json()["notification_access_granted"] is True
+
+    register_notification_parser(
+        "test_wallet",
+        lambda title, body: ParsedWalletTransfer(
+            provider_transaction_id="test-provider-transaction-001",
+            provider_reference="test-provider-reference-001",
+            sender_identifier="+967 733 123 456",
+            recipient_identifier="+967 777 000 111",
+            amount=Decimal("20.00"),
+            currency="USD",
+            provider_status="settled",
+            occurred_at=datetime.now(timezone.utc),
+        ),
+    )
 
     event_payload = {
         "event_uuid": "5ca1c8c1-7db2-4c44-9d60-3e7c6b86db44",
@@ -211,7 +221,7 @@ def test_wallet_device_registration_identity_and_event_intake(wallet_api):
         json=event_payload,
     )
     assert received.status_code == 200, received.text
-    assert received.json()["parse_status"] == "awaiting_provider_adapter"
+    assert received.json()["parse_status"] == "candidate_for_review"
     assert received.json()["automatic_activation"] is False
 
     duplicate = client.post(
@@ -229,6 +239,42 @@ def test_wallet_device_registration_identity_and_event_intake(wallet_api):
     assert event_record["payload_sha256"]
     assert "body" not in event_record
     assert "title" not in event_record
+
+    transactions = client.get("/api/v1/wallet-monitor/admin/transactions", headers=admin_headers)
+    assert transactions.status_code == 200, transactions.text
+    assert len(transactions.json()) == 1
+    transaction = transactions.json()[0]
+    assert transaction["verification_status"] == "pending_review"
+
+    first_verification = client.post(
+        f"/api/v1/wallet-monitor/admin/transactions/{transaction['id']}/verify",
+        headers=admin_headers,
+        json={
+            "observed_provider_identifier": "test-provider-transaction-001",
+            "amount": "20.00",
+            "currency": "USD",
+            "confirmed_in_wallet_app": True,
+            "note": "Verified first transfer directly inside the test wallet app.",
+        },
+    )
+    # The payment is recorded as financially verified, but fulfilment is blocked
+    # while the payer identity is still pending first-transfer approval.
+    assert first_verification.status_code == 409, first_verification.text
+
+    identity_approval = client.post(
+        f"/api/v1/wallet-monitor/admin/payer-wallets/{payer_id}/approve",
+        headers=admin_headers,
+    )
+    assert identity_approval.status_code == 200, identity_approval.text
+    assert identity_approval.json()["status"] == "active"
+    assert identity_approval.json()["first_transaction_id"] == transaction["id"]
+    assert identity_approval.json()["client_id"]
+    assert identity_approval.json()["fulfillment_id"]
+
+    registrations = client.get("/auth/registrations", headers=admin_headers)
+    registered = next(item for item in registrations.json() if item["id"] == registration_id)
+    assert registered["paid"] is True
+    assert registered["processed"] is True
 
     assert client.post(
         "/api/v1/wallet-monitor/device/heartbeat",
