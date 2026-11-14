@@ -202,6 +202,12 @@ def _rate_limit_policy(method: str, path: str):
         return ("wallet-device-events", 60, 60)
     if path == "/api/v1/wallet-monitor/device/heartbeat":
         return ("wallet-device-heartbeat", 12, 60)
+    if (
+        len(parts) == 7
+        and parts[:5] == ["api", "v1", "wallet-monitor", "admin", "transactions"]
+        and parts[6] == "verify"
+    ):
+        return ("wallet-transaction-verification", 10, 60)
     if path == "/mikrotik/reboot":
         return ("router-reboot", 3, 60)
     if path == "/cards/generate":
