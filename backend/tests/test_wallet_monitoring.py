@@ -22,10 +22,9 @@ from database import models
 from database.database import Base
 from services.auth_service import auth_service
 from services.wallet_monitoring import (
-    ParsedWalletTransfer,
     mask_wallet_identifier,
     normalize_wallet_identifier,
-    register_notification_parser,
+    parse_wallet_notification,
     wallet_fingerprint,
 )
 
@@ -41,6 +40,51 @@ def test_wallet_identifier_rejects_letters_and_unsupported_symbols():
         normalize_wallet_identifier("wallet-967777123456")
     with pytest.raises(ValueError, match="unsupported character"):
         normalize_wallet_identifier("967777/123456")
+
+
+def test_jaib_receipt_parser_extracts_shared_arabic_receipt_fields(monkeypatch):
+    monkeypatch.setattr(settings, "WALLET_IDENTITY_HMAC_SECRET", "jaib-parser-test-secret-" * 2)
+    receipt = """
+    إيصال العملية
+    1,000 ريال يمني
+    رقم مرجع العملية 12345678901265
+    العملية
+    تحويل مشترك
+    تاريخ العملية 10/10/2026 (18:37)
+    المستفيد
+    مستفيد تجريبي
+    +967 777 000 111
+    المودع
+    مودع تجريبي
+    +967 733 123 456
+    """
+    parsed = parse_wallet_notification("jaib", "جيب", receipt)
+    assert parsed is not None
+    assert parsed.provider_reference == "12345678901265"
+    assert parsed.amount == Decimal("1000.00")
+    assert parsed.currency == "YER"
+    assert parsed.sender_identifier == "+967777123456"
+    assert parsed.recipient_identifier == "+967777000111"
+    assert parsed.provider_status == "receipt_only"
+    assert parsed.occurred_at == datetime(2026, 10, 10, 15, 37, tzinfo=timezone.utc)
+
+
+def test_arabic_receipt_parser_is_registered_for_all_seven_wallets():
+    sample = """
+    إيصال العملية
+    100 ريال يمني
+    رقم مرجع العملية 12345678
+    المستفيد
+    مستفيد تجريبي
+    +967 777 000 111
+    المودع
+    مودع تجريبي
+    +967 733 123 456
+    """
+    for code in ("jaib", "flousak", "jawali", "cash", "one_cash", "alkuraimi_jawwal", "mobile_money"):
+        parsed = parse_wallet_notification(code, "إيصال العملية", sample)
+        assert parsed is not None
+        assert parsed.provider_status == "receipt_only"
 
 
 def test_wallet_fingerprint_uses_keyed_digest(monkeypatch):
@@ -78,8 +122,8 @@ def wallet_api(tmp_path, monkeypatch):
                 username="wallet-new-owner",
                 hashed_password=auth_service.get_password_hash("Wallet-customer-password-2026!"),
                 plan="monthly",
-                price=20,
-                currency="USD",
+                price=1000,
+                currency="YER",
                 registration_token_hash=hashlib.sha256(registration_token.encode()).hexdigest(),
                 paid=False,
                 processed=False,
@@ -134,9 +178,9 @@ def test_wallet_device_registration_identity_and_event_intake(wallet_api):
         "/api/v1/wallet-monitor/admin/providers",
         headers=admin_headers,
         json={
-            "code": "test_wallet",
-            "display_name": "Test Wallet",
-            "package_names": ["com.example.wallet"],
+            "code": "jaib",
+            "display_name": "جيب",
+            "package_names": ["com.example.jaib"],
         },
     )
     assert provider.status_code == 200, provider.text
@@ -158,9 +202,9 @@ def test_wallet_device_registration_identity_and_event_intake(wallet_api):
         json={
             "provider_id": provider_id,
             "device_id": device_response.json()["id"],
-            "account_label": "Platform USD wallet",
+            "account_label": "Platform Jaib wallet",
             "account_identifier": "+967 777 000 111",
-            "currency": "USD",
+            "currency": "YER",
         },
     )
     assert receiver.status_code == 200, receiver.text
@@ -188,8 +232,8 @@ def test_wallet_device_registration_identity_and_event_intake(wallet_api):
         json={"payer_wallet_id": payer_id, "receiving_wallet_id": receiver_id},
     )
     assert intent.status_code == 200, intent.text
-    assert intent.json()["amount"] == "20.00"
-    assert intent.json()["currency"] == "USD"
+    assert intent.json()["amount"] == "1000.00"
+    assert intent.json()["currency"] == "YER"
     assert intent.json()["automatic_activation"] is False
 
     heartbeat = client.post(
@@ -205,28 +249,28 @@ def test_wallet_device_registration_identity_and_event_intake(wallet_api):
         headers=device_headers,
     )
     assert device_config.status_code == 200, device_config.text
-    assert device_config.json()["allowed_packages"] == ["com.example.wallet"]
+    assert device_config.json()["allowed_packages"] == ["com.example.jaib"]
     assert device_config.json()["automatic_activation"] is False
 
-    register_notification_parser(
-        "test_wallet",
-        lambda title, body: ParsedWalletTransfer(
-            provider_transaction_id="test-provider-transaction-001",
-            provider_reference="test-provider-reference-001",
-            sender_identifier="+967 733 123 456",
-            recipient_identifier="+967 777 000 111",
-            amount=Decimal("20.00"),
-            currency="USD",
-            provider_status="settled",
-            occurred_at=datetime.now(timezone.utc),
-        ),
-    )
-
+    receipt_text = """
+    إيصال العملية
+    1,000 ريال يمني
+    رقم مرجع العملية 12345678901265
+    العملية
+    تحويل مشترك
+    تاريخ العملية 10/10/2026 (18:37)
+    المستفيد
+    مستفيد تجريبي
+    +967 777 000 111
+    المودع
+    مودع تجريبي
+    +967 733 123 456
+    """
     event_payload = {
         "event_uuid": "5ca1c8c1-7db2-4c44-9d60-3e7c6b86db44",
-        "package_name": "com.example.wallet",
-        "title": "Transfer received",
-        "body": "This is test notification content and must not be stored.",
+        "package_name": "com.example.jaib",
+        "title": "جيب — إيصال العملية",
+        "body": receipt_text,
         "notification_posted_at": datetime.now(timezone.utc).isoformat(),
         "sent_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -265,9 +309,9 @@ def test_wallet_device_registration_identity_and_event_intake(wallet_api):
         f"/api/v1/wallet-monitor/admin/transactions/{transaction['id']}/verify",
         headers=admin_headers,
         json={
-            "observed_provider_identifier": "test-provider-transaction-001",
-            "amount": "20.00",
-            "currency": "USD",
+            "observed_provider_identifier": "12345678901265",
+            "amount": "1000.00",
+            "currency": "YER",
             "confirmed_in_wallet_app": True,
             "note": "Verified first transfer directly inside the test wallet app.",
         },
