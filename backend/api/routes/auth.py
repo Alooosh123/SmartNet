@@ -610,6 +610,18 @@ async def approve_registration(
         client.subscription_expires = expires
         client.is_active = True
 
+    await db.flush()
+    # Payer wallets registered with the one-time registration token are retained
+    # and linked to the newly created client account after activation.
+    payer_result = await db.execute(
+        select(models.PayerWalletIdentity).where(
+            models.PayerWalletIdentity.registration_id == reg.id,
+            models.PayerWalletIdentity.client_id.is_(None),
+        )
+    )
+    for payer_identity in payer_result.scalars().all():
+        payer_identity.client_id = client.id
+
     reg.processed = True
     db.add(models.AuditLog(
         action="approve_registration",
