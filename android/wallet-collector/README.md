@@ -1,36 +1,53 @@
 # SmartNet Wallet Collector (Android)
 
-A dedicated Android phone companion for SmartNet's wallet-notification intake API.
+تطبيق هاتف مخصص لاستقبال إشعارات المحافظ المعتمدة وإرسال أحداثها إلى SmartNet.
 
-## Build environment
+## التوافق والبناء
 
-- Android Studio Quail 4 (2026.1.4) or a compatible newer stable release.
-- JDK 17.
-- Android Gradle Plugin 9.4.0 with Gradle 9.6.0.
-- Android SDK Platform 36.
-- Kotlin Android plugin 2.2.10.
-- Minimum Android API: 26; target API: 36.
+- الحد الأدنى للتشغيل: Android 7.0 Nougat (API 24).
+- هدف البناء: Android 17 (API 37)، مع التوافق نزولاً حتى API 24.
+- Android Gradle Plugin 9.4.0 وGradle 9.6.0 وJDK 17 وAndroid SDK Platform 37.
+- يستخدم المشروع Kotlin المدمج في AGP 9.4، وCore Library Desugaring لدعم `java.time` على إصدارات Android الأقدم.
 
-Open this directory in Android Studio and sync the Gradle project. The repository does not currently include the Gradle wrapper JAR; use the IDE's Gradle 9.6.0 installation or generate a wrapper with `gradle wrapper --gradle-version 9.6.0` before command-line builds.
+افتح هذا المجلد في Android Studio لمزامنة المشروع وبناء APK. لا يحتوي المستودع حالياً على Gradle Wrapper JAR؛ يمكن استخدام Gradle 9.6.0 المثبت أو إنشاء Wrapper محلياً بواسطة `gradle wrapper --gradle-version 9.6.0`.
 
-## Enrollment
+## المحافظ المسجلة
 
-1. Create a dedicated phone in SmartNet using `POST /api/v1/wallet-monitor/admin/devices`. The response contains a one-time `device_token`; transfer it through a private channel.
-2. Register the provider and exact Android package name in SmartNet.
-3. Create a receiving-wallet account bound to that device. The device config endpoint returns only packages allowlisted for active receiving-wallet accounts bound to this phone.
-4. Install the APK, enter the HTTPS SmartNet API base URL and device token, then save.
-5. Grant Notification Access in Android Settings and tap “مزامنة إعدادات الهاتف الآن”.
-6. Confirm the heartbeat and package configuration from SmartNet.
+يحتوي SmartNet على سجل أولي للمحافظ التالية: جيب، فلوسك، جوالي، كاش، ون كاش، الكريمي جوال، وموبايل موني.
 
-## Security
+لا تُخمن أسماء حزم Android. بعد التحقق من التطبيق الرسمي المثبت على الهاتف، يسجل المدير اسم الحزمة الدقيق من خلال:
+`PUT /api/v1/wallet-monitor/admin/providers/{provider_id}/packages`
 
-- Device token and the offline notification queue are encrypted using an AES key generated in Android Keystore.
-- Release builds reject cleartext HTTP. HTTPS uses Android's default certificate and hostname validation.
-- The app does not request SMS, Accessibility, contacts, call-log, or wallet-account credential permissions.
-- The listener filters by backend package allowlist and skips common OTP/security-code prompts.
-- Events are queued encrypted locally and sent by Android JobScheduler. Temporary network errors retain events for retry; HTTP 401/403 stops sync and requires device-token review.
-- The collector does not mark payments settled, approve payer wallets, activate subscriptions, or execute RouterOS commands.
+ثم ينشئ حساب الاستقبال ويربطه بهاتف المراقبة. لا يلتقط التطبيق إلا الحزم التي يعيدها الخادم لهذا الجهاز عبر `GET /api/v1/wallet-monitor/device/config`.
 
-## Current limits
+## ربط الهاتف
 
-No provider-specific parsers are registered yet. The collector can be configured and can forward notifications from allowlisted packages, but events remain pending review until a provider adapter is validated with sanitized real notification examples. Automatic activation remains disabled.
+1. أنشئ هاتف مراقبة من `POST /api/v1/wallet-monitor/admin/devices`. يظهر `device_token` مرة واحدة فقط؛ انقله عبر قناة خاصة.
+2. سجل مزود المحفظة وPackage ID الرسمي، بعد التأكد من التطبيق الفعلي.
+3. أنشئ حساب الاستقبال واربطه بالهاتف ومزود المحفظة والعملة.
+4. ثبت APK وأدخل عنوان SmartNet HTTPS ورمز الهاتف.
+5. امنح التطبيق Notification Access من إعدادات Android.
+6. تحقق من heartbeat وقائمة الحزم قبل استقبال أي إشعارات فعلية.
+
+## قراءة إيصال جيب
+
+المحلل العربي المشترك يستخرج مرجع العملية والمبلغ والعملة والمرسل والمستفيد والتاريخ عندما تظهر هذه الحقول في نص الإشعار. صورة الإيصال الملتقطة داخل تطبيق جيب ليست بالضرورة هي نص إشعار Android؛ يجب مقارنة الإشعار الحقيقي على الهاتف بالإيصال.
+
+عندما لا توجد حالة نجاح صريحة، يصنف النظام العملية `receipt_only` ولا يعتمدها آلياً. يجب على مسؤول المالية التحقق من المعاملة داخل تطبيق المحفظة واعتمادها. وجود إيصال أو إشعار وحده ليس إثبات تسوية.
+
+## الأمان
+
+- رمز الهاتف والطابور المحلي المشفر محفوظان عبر Android Keystore.
+- إصدارات Release تتطلب HTTPS مع تحقق النظام من الشهادة واسم المضيف.
+- لا يطلب التطبيق SMS أو Accessibility أو جهات الاتصال أو كلمات مرور المحفظة أو PIN أو OTP.
+- يفلتر الإشعارات حسب قائمة الحزم التي خصصها الخادم لهذا الهاتف.
+- يخزن الأحداث محلياً بتشفير AES-GCM ويرسلها عبر JobScheduler مع إعادة المحاولة عند انقطاع الاتصال.
+- لا يعتمد التطبيق حوالة، ولا يفعّل اشتراكاً، ولا ينفذ تغييرات MikroTik.
+
+## قيود Android 7
+
+NotificationListenerService متاح منذ API 18، لذلك يتجاوز الحد الأدنى API 24. لكن Android قد يمنع Notification Listener على بعض أجهزة Android 10 وما دون منخفضة الذاكرة (Low-RAM)، أو في ملفات العمل المُدارة؛ هذه القيود لا يمكن للتطبيق تجاوزها. يجب اختبار الهاتف المقصود قبل اعتماده كهاتف استقبال دائم.
+
+## حدود التكامل الحالية
+
+المحلل المشترك مبني على شكل إيصال جيب المرفق، مع اختبار اصطناعي للأسماء السبعة. هذا لا يثبت أن إشعارات التطبيقات السبعة الفعلية تعرض الحقول أو الصياغة نفسها. نحتاج عينة إشعار Android حقيقية منزوعة البيانات لكل محفظة لمراجعة القالب قبل تشغيلها. التفعيل الآلي العام ما زال مغلقاً.
