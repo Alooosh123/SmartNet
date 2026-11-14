@@ -75,3 +75,8 @@ Restore scripts require explicit confirmation. Verify SHA256 and rehearse restor
 - Production deploy cannot be verified until domain, TLS, target host and rollback plan are available.
 - Back up the database and uploads and perform a successful restore before launch.
 - Rotate credentials previously committed in Git history; removing files from the current tree does not remove history.
+
+## Wallet Monitoring Agent (design)
+
+The design and phased acceptance requirements for the dedicated Android notification collector, wallet identity approval, deterministic payment matching, and idempotent subscription activation/renewal are documented in [docs/WALLET_MONITORING_AGENT.md](WALLET_MONITORING_AGENT.md). This design is not a live integration: manual verification remains the production fallback until each wallet adapter passes shadow-mode and live acceptance.
+
