@@ -5,11 +5,7 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-try:
-    import routeros_api
-    ROUTEROS_AVAILABLE = True
-except ImportError:
-    ROUTEROS_AVAILABLE = False
+from services.routeros_connection import create_routeros_connection
 
 
 class MikroTikService:
@@ -23,18 +19,12 @@ class MikroTikService:
     def _get_api(self):
         if settings.MIKROTIK_DEMO_MODE:
             return None
-        if not ROUTEROS_AVAILABLE:
-            raise RuntimeError("routeros_api is not installed; real MikroTik mode is unavailable.")
-        if not settings.MIKROTIK_HOST or not settings.MIKROTIK_USERNAME or not settings.MIKROTIK_PASSWORD:
-            raise RuntimeError("MIKROTIK_HOST, MIKROTIK_USERNAME and MIKROTIK_PASSWORD must be configured.")
-        connection = routeros_api.RouterOsApiPool(
-            settings.MIKROTIK_HOST,
+        return create_routeros_connection(
+            host=settings.MIKROTIK_HOST,
             username=settings.MIKROTIK_USERNAME,
             password=settings.MIKROTIK_PASSWORD,
             port=settings.MIKROTIK_PORT,
-            plaintext_login=True,
         )
-        return connection
 
     def get_status(self):
         if settings.MIKROTIK_DEMO_MODE:
