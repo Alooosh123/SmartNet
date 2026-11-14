@@ -79,3 +79,18 @@ def test_routeros_connection_rejects_invalid_port(monkeypatch):
             password="test-secret",
             port=70000,
         )
+
+
+def test_admin_session_listing_uses_readonly_router_account(monkeypatch):
+    from types import SimpleNamespace
+    from api.routes import mikrotik
+
+    monkeypatch.setattr(
+        mikrotik.mikrotik_service,
+        "get_active_users",
+        lambda: (_ for _ in ()).throw(AssertionError("privileged operational account must not be used for reads")),
+    )
+    monkeypatch.setattr(mikrotik.mikrotik_readonly_service, "get_active_users", lambda: [{"user": "test-user"}])
+
+    result = mikrotik.get_active_users(current_admin=SimpleNamespace(username="admin"))
+    assert result == [{"user": "test-user"}]
