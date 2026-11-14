@@ -141,6 +141,12 @@ class DeviceNotification(BaseModel):
         return value
 
 
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    if value is None:
+        return None
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
 def _require_monitoring() -> None:
     if not settings.WALLET_MONITORING_ENABLED:
         raise HTTPException(status_code=503, detail="مراقبة المحافظ غير مفعلة حالياً.")
@@ -899,7 +905,8 @@ async def receive_wallet_notification(
                 event.provider_status = parsed.provider_status.strip().lower()
                 event.parse_status = "candidate_for_review"
                 event.reason_code = "human_review_required"
-                event.notification_posted_at = parsed.occurred_at or payload.notification_posted_at
+                if parsed.occurred_at is not None and parsed.occurred_at.tzinfo is None:
+                    raise ValueError("Parsed transaction timestamp must include a timezone.")
                 if event.amount <= 0 or len(event.currency) != 3 or not event.currency.isalpha():
                     raise ValueError("Invalid amount or currency.")
             except (ValueError, RuntimeError, InvalidOperation, AttributeError):
@@ -949,7 +956,24 @@ async def receive_wallet_notification(
                         models.WalletPaymentIntent.expires_at > now,
                     )
                 )
-                matching_intents = intent_result.scalars().all()
+                candidate_intents = intent_result.scalars().all()
+                transaction_time = _as_utc(parsed.occurred_at)
+                if transaction_time is None:
+                    matching_intents = []
+                    event.reason_code = "transaction_timestamp_missing"
+                else:
+                    matching_intents = [
+                        intent for intent in candidate_intents
+                        if (
+                            _as_utc(intent.created_at) - timedelta(minutes=5)
+                            <= transaction_time
+                            <= _as_utc(intent.expires_at)
+                            and transaction_time <= now + timedelta(minutes=5)
+                        )
+                    ]
+                    if not matching_intents:
+                        event.reason_code = "transaction_outside_payment_window"
+
                 if len(matching_intents) == 1:
                     event.intent_id = matching_intents[0].id
                     if payer_identity.status != "active":
@@ -958,9 +982,7 @@ async def receive_wallet_notification(
                         event.reason_code = "provider_status_not_settled"
                     else:
                         event.reason_code = "exact_match_waiting_live_adapter_acceptance"
-                elif not matching_intents:
-                    event.reason_code = "no_matching_open_payment_intent"
-                else:
+                elif len(matching_intents) > 1:
                     event.reason_code = "ambiguous_payment_intent"
 
             if receiving_account and (event.provider_transaction_id or event.provider_reference):
@@ -997,7 +1019,7 @@ async def receive_wallet_notification(
                         currency=event.currency,
                         provider_status=event.provider_status or "unknown",
                         verification_status="pending_review",
-                        occurred_at=event.notification_posted_at,
+                        occurred_at=_as_utc(parsed.occurred_at),
                     )
                     db.add(transaction)
                     await db.flush()
