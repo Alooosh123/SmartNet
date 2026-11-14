@@ -63,7 +63,7 @@ def test_jaib_receipt_parser_extracts_shared_arabic_receipt_fields(monkeypatch):
     assert parsed.provider_reference == "12345678901265"
     assert parsed.amount == Decimal("1000.00")
     assert parsed.currency == "YER"
-    assert parsed.sender_identifier == "+967777123456"
+    assert parsed.sender_identifier == "+967733123456"
     assert parsed.recipient_identifier == "+967777000111"
     assert parsed.provider_status == "receipt_only"
     assert parsed.occurred_at == datetime(2026, 10, 10, 15, 37, tzinfo=timezone.utc)
