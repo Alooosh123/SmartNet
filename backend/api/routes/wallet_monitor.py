@@ -511,16 +511,72 @@ async def approve_payer_wallet_identity(
         raise HTTPException(status_code=404, detail="هوية المحفظة غير موجودة.")
     if identity.status == "revoked":
         raise HTTPException(status_code=409, detail="لا يمكن اعتماد هوية ملغاة؛ اطلب تسجيلاً جديداً.")
+    if identity.status == "active":
+        return {"ok": True, "identity_id": identity.id, "status": "active", "idempotent_replay": True}
+
+    verified_result = await db.execute(
+        select(models.WalletTransaction)
+        .join(
+            models.WalletPaymentIntent,
+            models.WalletPaymentIntent.id == models.WalletTransaction.intent_id,
+        )
+        .where(
+            models.WalletPaymentIntent.payer_wallet_id == identity.id,
+            models.WalletTransaction.provider_id == identity.provider_id,
+            models.WalletTransaction.sender_fingerprint == identity.phone_fingerprint,
+            models.WalletTransaction.verification_status == "manually_verified",
+            models.WalletTransaction.provider_status.in_(("settled", "completed", "successful", "success")),
+        )
+        .order_by(models.WalletTransaction.id.desc())
+    )
+    verified_transactions = verified_result.scalars().all()
+    if not verified_transactions:
+        raise HTTPException(
+            status_code=409,
+            detail="لا يمكن اعتماد رقم المرسل قبل التحقق من أول حوالة فعلية داخل تطبيق المحفظة.",
+        )
+    if len(verified_transactions) != 1:
+        raise HTTPException(
+            status_code=409,
+            detail="توجد أكثر من حوالة أولى موثقة لهذا الرقم؛ يجب تسوية الالتباس يدوياً.",
+        )
+
+    transaction = verified_transactions[0]
+    if not transaction.intent_id:
+        raise HTTPException(status_code=409, detail="الحوالة الأولى ليست مرتبطة بطلب دفع صالح.")
     identity.status = "active"
     identity.approved_by = admin.username
     identity.approved_at = datetime.now(timezone.utc)
     db.add(models.AuditLog(
         action="payer_wallet_identity_approved",
         performed_by=admin.username,
-        details=f"Approved payer wallet identity #{identity.id} ({identity.masked_phone}).",
+        details=(
+            f"Approved payer wallet identity #{identity.id} ({identity.masked_phone}) "
+            f"after manually verifying first transaction #{transaction.id}."
+        ),
     ))
-    await db.commit()
-    return {"ok": True, "identity_id": identity.id, "status": identity.status}
+    try:
+        fulfillment = await fulfill_wallet_payment_intent(
+            db,
+            intent_id=transaction.intent_id,
+            transaction_id=transaction.id,
+            actor=admin.username,
+            allow_automatic=False,
+        )
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=f"تعذر اعتماد أول حوالة وربط المحفظة: {exc}")
+
+    return {
+        "ok": True,
+        "identity_id": identity.id,
+        "status": "active",
+        "first_transaction_id": transaction.id,
+        "fulfillment_id": fulfillment["fulfillment_id"],
+        "client_id": fulfillment["client_id"],
+        "new_expiry": fulfillment["new_expiry"],
+        "idempotent_replay": fulfillment["idempotent_replay"],
+    }
 
 
 @router.post("/admin/payer-wallets/{identity_id}/revoke")
@@ -606,8 +662,8 @@ async def _create_payment_intent(
         client_id = None
         registration_id = registration.id
     else:
-        if payer.client_id != client.id or payer.status != "active":
-            raise HTTPException(status_code=403, detail="يجب اعتماد محفظة المرسل وربطها بحسابك أولاً.")
+        if payer.client_id != client.id or payer.status not in {"active", "pending_approval"}:
+            raise HTTPException(status_code=403, detail="هوية محفظة المرسل غير مرتبطة بحسابك أو ملغاة.")
         if plan not in PLANS:
             raise HTTPException(status_code=400, detail="الباقة المطلوبة غير متاحة.")
         amount = Decimal(str(PLANS[plan]["price"])).quantize(Decimal("0.01"))
