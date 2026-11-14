@@ -59,3 +59,15 @@ Application-level per-client limits cover login, registration, receipt and state
 - Verify a real transfer manually against the actual wallet/bank before entering manual verification. Keep gateway mode disabled.
 - Deploy to the real host only after DNS, Caddy HTTPS, service restart, monitoring, off-host backup and restore are proven.
 - These repository/CI checks do not prove a live router, a payment-provider connection or a production host is available.
+
+
+## Android wallet notification collector — current controls
+
+- Wallet monitoring is disabled by default. Production requires a separate high-entropy `WALLET_IDENTITY_HMAC_SECRET` and HTTPS `APP_PUBLIC_URL` before the monitor API can be enabled.
+- Device bearer tokens are stored as SHA-256 digests and returned once when an administrator creates a device. Revoking a device changes its stored token digest and prevents further requests.
+- Each event is scoped to its registered device; the receiving wallet match must belong to that same device and provider. Event UUIDs are unique per device to make retries idempotent.
+- Notification title/body are used in memory for a registered parser and are not stored in the event table. The database stores a SHA-256 digest and the minimum parsed candidate fields needed for review.
+- Payer and receiving wallet identifiers are stored as keyed HMAC fingerprints plus masked suffixes, not as raw phone/account values. Keep the HMAC secret stable and backed up securely; rotating it requires a planned fingerprint migration.
+- No provider parser is currently registered. New events remain in the review queue; they are not evidence of settled funds.
+- `WALLET_AUTO_ACTIVATION_ENABLED=true` is rejected by current settings validation. Do not remove this guard until provider-specific parsing, transaction replay/reversal checks, shadow-mode reconciliation and a reviewed fulfilment worker are implemented and accepted.
+- Android must not request Accessibility or SMS permissions, store wallet PIN/OTP, automate wallet UI, or be treated as a financial authority. The dedicated phone only forwards notification events over HTTPS.
