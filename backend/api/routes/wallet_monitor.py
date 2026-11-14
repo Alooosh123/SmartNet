@@ -57,7 +57,7 @@ class ProviderPackagesUpdate(BaseModel):
     @field_validator("package_names")
     @classmethod
     def validate_packages(cls, values: list[str]) -> list[str]:
-        pattern = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$")
+        pattern = re.compile(r"^[A-Za-z][A-Za-z0-9_]*([.][A-Za-z][A-Za-z0-9_]*)+$")
         cleaned = sorted({value.strip() for value in values if value.strip()})
         if any(len(value) > 200 or not pattern.fullmatch(value) for value in cleaned):
             raise ValueError("Package names must be valid Android application IDs.")
