@@ -6,6 +6,7 @@ transaction already marked provider_verified or manually_verified by a trusted p
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy.exc import IntegrityError
