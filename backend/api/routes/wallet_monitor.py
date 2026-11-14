@@ -16,6 +16,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -642,11 +643,11 @@ async def receive_wallet_notification(
         reason_code="package_not_allowlisted" if not provider else "provider_adapter_not_registered",
         notification_posted_at=payload.notification_posted_at,
     )
+    parsed = None
     if provider:
         try:
             parsed = parse_wallet_notification(provider.code, payload.title, payload.body)
         except Exception:
-            parsed = None
             event.parse_status = "parse_error"
             event.reason_code = "provider_parser_error"
         if parsed:
@@ -661,6 +662,8 @@ async def receive_wallet_notification(
                 event.parse_status = "candidate_for_review"
                 event.reason_code = "human_review_required"
                 event.notification_posted_at = parsed.occurred_at or payload.notification_posted_at
+                if event.amount <= 0 or len(event.currency) != 3 or not event.currency.isalpha():
+                    raise ValueError("Invalid amount or currency.")
             except (ValueError, RuntimeError, InvalidOperation, AttributeError):
                 event.parse_status = "parse_error"
                 event.reason_code = "invalid_parser_output"
@@ -669,8 +672,100 @@ async def receive_wallet_notification(
     db.add(event)
     try:
         await db.flush()
+        transaction = None
+        if parsed and event.parse_status == "candidate_for_review":
+            account_result = await db.execute(
+                select(models.ReceivingWalletAccount).where(
+                    models.ReceivingWalletAccount.provider_id == provider.id,
+                    models.ReceivingWalletAccount.account_fingerprint == event.recipient_fingerprint,
+                    models.ReceivingWalletAccount.is_active.is_(True),
+                )
+            )
+            receiving_accounts = account_result.scalars().all()
+            payer_result = await db.execute(
+                select(models.PayerWalletIdentity).where(
+                    models.PayerWalletIdentity.provider_id == provider.id,
+                    models.PayerWalletIdentity.phone_fingerprint == event.sender_fingerprint,
+                    models.PayerWalletIdentity.status != "revoked",
+                )
+            )
+            payer_identities = payer_result.scalars().all()
+            receiving_account = receiving_accounts[0] if len(receiving_accounts) == 1 else None
+            payer_identity = payer_identities[0] if len(payer_identities) == 1 else None
+
+            if len(receiving_accounts) != 1:
+                event.reason_code = "receiving_account_unmatched"
+            elif len(payer_identities) != 1:
+                event.reason_code = "payer_identity_unmatched"
+            elif not event.provider_transaction_id and not event.provider_reference:
+                event.reason_code = "missing_unique_provider_reference"
+            else:
+                intent_result = await db.execute(
+                    select(models.WalletPaymentIntent).where(
+                        models.WalletPaymentIntent.payer_wallet_id == payer_identity.id,
+                        models.WalletPaymentIntent.receiving_wallet_id == receiving_account.id,
+                        models.WalletPaymentIntent.amount == event.amount,
+                        models.WalletPaymentIntent.currency == event.currency,
+                        models.WalletPaymentIntent.status == "open",
+                        models.WalletPaymentIntent.expires_at > now,
+                    )
+                )
+                matching_intents = intent_result.scalars().all()
+                if len(matching_intents) == 1:
+                    event.intent_id = matching_intents[0].id
+                    if payer_identity.status != "active":
+                        event.reason_code = "payer_identity_pending_approval"
+                    elif event.provider_status not in {"settled", "completed", "successful", "success"}:
+                        event.reason_code = "provider_status_not_settled"
+                    else:
+                        event.reason_code = "exact_match_waiting_live_adapter_acceptance"
+                elif not matching_intents:
+                    event.reason_code = "no_matching_open_payment_intent"
+                else:
+                    event.reason_code = "ambiguous_payment_intent"
+
+            if receiving_account and (event.provider_transaction_id or event.provider_reference):
+                duplicate_conditions = []
+                if event.provider_transaction_id:
+                    duplicate_conditions.append(
+                        models.WalletTransaction.provider_transaction_id == event.provider_transaction_id
+                    )
+                if event.provider_reference:
+                    duplicate_conditions.append(
+                        models.WalletTransaction.provider_reference == event.provider_reference
+                    )
+                duplicate_result = await db.execute(
+                    select(models.WalletTransaction).where(
+                        models.WalletTransaction.provider_id == provider.id,
+                        models.WalletTransaction.receiving_wallet_id == receiving_account.id,
+                        or_(*duplicate_conditions),
+                    )
+                )
+                if duplicate_result.scalars().first():
+                    event.parse_status = "duplicate_transaction"
+                    event.reason_code = "provider_transaction_already_seen"
+                else:
+                    transaction = models.WalletTransaction(
+                        provider_id=provider.id,
+                        receiving_wallet_id=receiving_account.id,
+                        event_id=event.id,
+                        intent_id=event.intent_id,
+                        provider_transaction_id=event.provider_transaction_id,
+                        provider_reference=event.provider_reference,
+                        sender_fingerprint=event.sender_fingerprint,
+                        recipient_fingerprint=event.recipient_fingerprint,
+                        amount=event.amount,
+                        currency=event.currency,
+                        provider_status=event.provider_status or "unknown",
+                        verification_status="pending_review",
+                        occurred_at=event.notification_posted_at,
+                    )
+                    db.add(transaction)
+                    await db.flush()
+
         db.add(models.WalletPaymentReview(
             event_id=event.id,
+            transaction_id=transaction.id if transaction else None,
             reason_code=event.reason_code or "manual_review_required",
             status="open",
         ))
