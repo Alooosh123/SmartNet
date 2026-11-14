@@ -34,7 +34,7 @@ def get_router_status(current_user: dict = Depends(get_current_user)):
 def get_active_users(current_admin=Depends(get_current_admin)):
     """Active subscriber identities and IP/MAC details are administrator-only."""
     try:
-        return mikrotik_service.get_active_users()
+        return mikrotik_readonly_service.get_active_users()
     except Exception:
         raise HTTPException(status_code=503, detail="تعذر قراءة الجلسات النشطة من الراوتر.")
 
