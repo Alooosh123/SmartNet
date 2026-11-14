@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import List, Optional
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -31,11 +32,12 @@ class Settings(BaseSettings):
     MIKROTIK_HOST: str = "192.168.88.1"
     MIKROTIK_USERNAME: str = "admin"
     MIKROTIK_PASSWORD: str = ""
-    MIKROTIK_PORT: int = 8728
+    MIKROTIK_PORT: int = 8729
     MIKROTIK_READONLY_HOST: Optional[str] = None
     MIKROTIK_READONLY_USERNAME: Optional[str] = None
     MIKROTIK_READONLY_PASSWORD: Optional[str] = None
-    MIKROTIK_READONLY_PORT: int = 8728
+    MIKROTIK_READONLY_PORT: int = 8729
+    MIKROTIK_TLS_CA_FILE: Optional[str] = None
     MIKROTIK_DEMO_MODE: bool = True
     SSID: str = "SmartNet-WiFi"
 
@@ -90,6 +92,10 @@ class Settings(BaseSettings):
                 raise ValueError("PAYMENT_DEMO_MODE must be false in production.")
             if self.MIKROTIK_DEMO_MODE:
                 raise ValueError("MIKROTIK_DEMO_MODE must be false in production.")
+            if not 1 <= self.MIKROTIK_PORT <= 65535 or not 1 <= self.MIKROTIK_READONLY_PORT <= 65535:
+                raise ValueError("RouterOS API-SSL ports must be between 1 and 65535.")
+            if self.MIKROTIK_TLS_CA_FILE and not Path(self.MIKROTIK_TLS_CA_FILE).expanduser().is_file():
+                raise ValueError("MIKROTIK_TLS_CA_FILE must reference an existing CA certificate file.")
             if not self.MIKROTIK_PASSWORD:
                 raise ValueError("MIKROTIK_PASSWORD is required in production.")
             if self.MIKROTIK_USERNAME.strip().lower() in {"admin", "administrator"}:
