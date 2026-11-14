@@ -101,7 +101,7 @@ Keep these values until the Android collector and a real wallet-specific adapter
 3. Set `WALLET_MONITORING_ENABLED=true` only when the Android collector is ready to use the HTTPS backend.
 4. As administrator, register the wallet provider with the exact Android package name from the verified application listing, then create the dedicated monitor device.
 5. Transfer the one-time `device_token` to the dedicated phone through a secure channel. Never include it in screenshots, tickets or repository files.
-6. Register the receiving wallet account with its provider, device and currency. Add the payer number through the registration token or authenticated client route; approve it only after an operator has verified ownership and the first transfer in the actual wallet app.
+6. Register the receiving wallet account with its provider, device and currency. Add the payer number through the registration token or authenticated client route. The identity approval endpoint rejects approval until a first matching transaction is manually verified against the actual wallet app; after approval it fulfils that first registration/renewal exactly once.
 7. Keep incoming events in review until a provider-specific parser is implemented from sanitized real notification examples and passes shadow-mode plus duplicate/reversal tests.
 
 ### API paths
@@ -113,7 +113,8 @@ Keep these values until the Android collector and a real wallet-specific adapter
 - `POST /api/v1/wallet-monitor/admin/payer-wallets/{id}/approve`
 - `POST /api/v1/wallet-monitor/registrations/{registration_id}/payment-intents`
 - `POST /api/v1/wallet-monitor/device/heartbeat` and `POST /api/v1/wallet-monitor/device/events`
-- `GET /api/v1/wallet-monitor/admin/events`
+- `GET /api/v1/wallet-monitor/admin/events` and `GET /api/v1/wallet-monitor/admin/transactions`
+- `POST /api/v1/wallet-monitor/admin/transactions/{transaction_id}/verify` (manual verification against the actual wallet app; first-transfer fulfilment waits for payer identity approval)
 
 See [docs/WALLET_MONITORING_AGENT.md](WALLET_MONITORING_AGENT.md) for the full decision model and remaining phases.
 
