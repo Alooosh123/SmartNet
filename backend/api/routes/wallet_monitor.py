@@ -25,6 +25,7 @@ from api.dependencies import get_current_admin, get_current_user
 from config.settings import settings
 from database import database, models
 from services.subscription_agent import PLANS
+from services.wallet_fulfillment import fulfill_wallet_payment_intent
 from services.wallet_monitoring import (
     mask_wallet_identifier,
     parse_wallet_notification,
@@ -83,6 +84,22 @@ class PaymentIntentCreate(BaseModel):
 class DeviceHeartbeat(BaseModel):
     app_version: str = Field(min_length=1, max_length=40)
     notification_access_granted: bool
+
+
+class WalletTransactionVerification(BaseModel):
+    observed_provider_identifier: str = Field(min_length=4, max_length=160)
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    currency: str = Field(min_length=3, max_length=3)
+    confirmed_in_wallet_app: bool
+    note: str = Field(min_length=6, max_length=500)
+
+    @field_validator("currency")
+    @classmethod
+    def normalize_verification_currency(cls, value: str) -> str:
+        result = value.strip().upper()
+        if not result.isalpha():
+            raise ValueError("Currency must be a three-letter code.")
+        return result
 
 
 class DeviceNotification(BaseModel):
@@ -870,6 +887,114 @@ async def receive_wallet_notification(
         "parse_status": event.parse_status,
         "reason_code": event.reason_code,
         "automatic_activation": False,
+    }
+
+
+@router.get("/admin/transactions")
+async def list_wallet_transactions(
+    limit: int = 100,
+    db: AsyncSession = Depends(database.get_db),
+    _admin=Depends(get_current_admin),
+):
+    if limit < 1 or limit > 500:
+        raise HTTPException(status_code=400, detail="الحد يجب أن يكون بين 1 و500.")
+    result = await db.execute(
+        select(models.WalletTransaction)
+        .order_by(models.WalletTransaction.id.desc())
+        .limit(limit)
+    )
+    return [{
+        "id": item.id,
+        "provider_id": item.provider_id,
+        "receiving_wallet_id": item.receiving_wallet_id,
+        "event_id": item.event_id,
+        "intent_id": item.intent_id,
+        "provider_transaction_id": item.provider_transaction_id,
+        "provider_reference": item.provider_reference,
+        "amount": str(item.amount),
+        "currency": item.currency,
+        "provider_status": item.provider_status,
+        "verification_status": item.verification_status,
+        "occurred_at": item.occurred_at,
+        "created_at": item.created_at,
+    } for item in result.scalars().all()]
+
+
+@router.post("/admin/transactions/{transaction_id}/verify")
+async def verify_wallet_transaction_manually(
+    transaction_id: int,
+    payload: WalletTransactionVerification,
+    db: AsyncSession = Depends(database.get_db),
+    admin=Depends(get_current_admin),
+):
+    """Verify a parsed notification against the actual wallet app before fulfilment."""
+    transaction = await db.get(models.WalletTransaction, transaction_id)
+    if not transaction:
+        raise HTTPException(status_code=404, detail="معاملة المحفظة غير موجودة.")
+    if transaction.verification_status == "fulfilled":
+        return {
+            "ok": True,
+            "idempotent_replay": True,
+            "transaction_id": transaction.id,
+            "verification_status": transaction.verification_status,
+        }
+    if transaction.verification_status not in {"pending_review", "manually_verified"}:
+        raise HTTPException(status_code=409, detail="حالة المعاملة لا تسمح بالاعتماد اليدوي.")
+    if not payload.confirmed_in_wallet_app:
+        raise HTTPException(status_code=400, detail="يجب التحقق من وصول الحوالة داخل تطبيق المحفظة أولاً.")
+    if payload.amount.quantize(Decimal("0.01")) != Decimal(str(transaction.amount)).quantize(Decimal("0.01")):
+        raise HTTPException(status_code=400, detail="المبلغ المدخل لا يطابق سجل المعاملة.")
+    if payload.currency != transaction.currency:
+        raise HTTPException(status_code=400, detail="عملة المعاملة لا تطابق العملة المدخلة.")
+    if payload.observed_provider_identifier not in {
+        transaction.provider_transaction_id,
+        transaction.provider_reference,
+    }:
+        raise HTTPException(status_code=400, detail="معرف العملية لا يطابق معرف المزود المستخرج.")
+    if transaction.provider_status not in {"settled", "completed", "successful", "success"}:
+        raise HTTPException(status_code=409, detail="المزود لم يعلن حالة تسوية نهائية.")
+    if not transaction.intent_id:
+        raise HTTPException(status_code=409, detail="لم تتم مطابقة المعاملة بطلب دفع واحد؛ يلزم ربطها ومراجعتها أولاً.")
+
+    transaction.verification_status = "manually_verified"
+    review_result = await db.execute(
+        select(models.WalletPaymentReview).where(
+            models.WalletPaymentReview.transaction_id == transaction.id,
+            models.WalletPaymentReview.status == "open",
+        )
+    )
+    review = review_result.scalars().first()
+    if review:
+        review.note = payload.note.strip()
+        review.reviewed_by = admin.username
+        review.reviewed_at = datetime.now(timezone.utc)
+    db.add(models.AuditLog(
+        action="wallet_transaction_manually_verified",
+        performed_by=admin.username,
+        details=f"Transaction #{transaction.id} verified in the wallet app. Note={payload.note.strip()}",
+    ))
+    await db.commit()
+
+    try:
+        fulfilment = await fulfill_wallet_payment_intent(
+            db,
+            intent_id=transaction.intent_id,
+            transaction_id=transaction.id,
+            actor=admin.username,
+            allow_automatic=False,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=f"تم تسجيل التحقق المالي لكن تعذر تنفيذ الاشتراك: {exc}")
+
+    return {
+        "ok": True,
+        "idempotent_replay": fulfilment["idempotent_replay"],
+        "transaction_id": transaction.id,
+        "fulfillment_id": fulfilment["fulfillment_id"],
+        "client_id": fulfilment["client_id"],
+        "new_expiry": fulfilment["new_expiry"],
+        "plan": fulfilment["plan"],
+        "verification_status": "fulfilled",
     }
 
 
