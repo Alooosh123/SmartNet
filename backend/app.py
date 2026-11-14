@@ -19,7 +19,7 @@ from database import models
 from services.auth_service import auth_service
 from services.subscription_agent import subscription_agent_loop
 from services.network_observer import network_observer_loop
-from api.routes import auth, mikrotik, cards, client
+from api.routes import auth, mikrotik, cards, client, wallet_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -198,6 +198,10 @@ def _rate_limit_policy(method: str, path: str):
         return ("manual-payment-verification", 10, 60)
     if path == "/auth/reconciliation/statement":
         return ("statement-upload", 5, 60)
+    if path == "/api/v1/wallet-monitor/device/events":
+        return ("wallet-device-events", 60, 60)
+    if path == "/api/v1/wallet-monitor/device/heartbeat":
+        return ("wallet-device-heartbeat", 12, 60)
     if path == "/mikrotik/reboot":
         return ("router-reboot", 3, 60)
     if path == "/cards/generate":
@@ -247,6 +251,7 @@ app.include_router(auth.router)
 app.include_router(mikrotik.router)
 app.include_router(cards.router)
 app.include_router(client.router)
+app.include_router(wallet_monitor.router)
 
 
 @app.get("/")
