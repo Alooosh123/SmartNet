@@ -5,29 +5,20 @@ separate RouterOS account with read-only policy, not the operational account.
 """
 from config.settings import settings
 
-try:
-    import routeros_api
-except ImportError:  # pragma: no cover - installation validation catches this
-    routeros_api = None
-
 from services.mikrotik_service import mikrotik_service
+from services.routeros_connection import create_routeros_connection
 
 
 class MikroTikReadOnlyService:
     def _get_api(self):
         if settings.MIKROTIK_DEMO_MODE:
             return None
-        if routeros_api is None:
-            raise RuntimeError("routeros_api is not installed.")
         host = settings.MIKROTIK_READONLY_HOST or settings.MIKROTIK_HOST
-        if not host or not settings.MIKROTIK_READONLY_USERNAME or not settings.MIKROTIK_READONLY_PASSWORD:
-            raise RuntimeError("Read-only MikroTik API credentials are not configured.")
-        return routeros_api.RouterOsApiPool(
-            host,
-            username=settings.MIKROTIK_READONLY_USERNAME,
-            password=settings.MIKROTIK_READONLY_PASSWORD,
+        return create_routeros_connection(
+            host=host,
+            username=settings.MIKROTIK_READONLY_USERNAME or "",
+            password=settings.MIKROTIK_READONLY_PASSWORD or "",
             port=settings.MIKROTIK_READONLY_PORT,
-            plaintext_login=True,
         )
 
     def get_status(self):
