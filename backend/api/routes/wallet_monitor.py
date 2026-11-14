@@ -750,6 +750,7 @@ async def receive_wallet_notification(
             account_result = await db.execute(
                 select(models.ReceivingWalletAccount).where(
                     models.ReceivingWalletAccount.provider_id == provider.id,
+                    models.ReceivingWalletAccount.device_id == device.id,
                     models.ReceivingWalletAccount.account_fingerprint == event.recipient_fingerprint,
                     models.ReceivingWalletAccount.is_active.is_(True),
                 )
