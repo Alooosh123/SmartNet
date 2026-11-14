@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -45,6 +46,19 @@ class ProviderCreate(BaseModel):
     def validate_packages(cls, values: list[str]) -> list[str]:
         cleaned = sorted({value.strip() for value in values if value.strip()})
         if not cleaned or any(len(value) > 200 or " " in value for value in cleaned):
+            raise ValueError("Package names must be valid Android application IDs.")
+        return cleaned
+
+
+class ProviderPackagesUpdate(BaseModel):
+    package_names: list[str] = Field(max_length=10)
+
+    @field_validator("package_names")
+    @classmethod
+    def validate_packages(cls, values: list[str]) -> list[str]:
+        pattern = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$")
+        cleaned = sorted({value.strip() for value in values if value.strip()})
+        if any(len(value) > 200 or not pattern.fullmatch(value) for value in cleaned):
             raise ValueError("Package names must be valid Android application IDs.")
         return cleaned
 
@@ -280,6 +294,34 @@ async def list_wallet_providers(
         "parser_version": item.parser_version,
         "auto_verification_enabled": item.auto_verification_enabled,
     } for item in providers]
+
+
+@router.put("/admin/providers/{provider_id}/packages")
+async def update_wallet_provider_packages(
+    provider_id: int,
+    payload: ProviderPackagesUpdate,
+    db: AsyncSession = Depends(database.get_db),
+    admin=Depends(get_current_admin),
+):
+    provider = await db.get(models.WalletProvider, provider_id)
+    if not provider:
+        raise HTTPException(status_code=404, detail="مزود المحفظة غير موجود.")
+    provider.package_allowlist = json.dumps(payload.package_names, ensure_ascii=False)
+    db.add(models.AuditLog(
+        action="wallet_provider_packages_updated",
+        performed_by=admin.username,
+        details=f"Provider={provider.code}; package count={len(payload.package_names)}.",
+    ))
+    await db.commit()
+    return {
+        "id": provider.id,
+        "code": provider.code,
+        "display_name": provider.display_name,
+        "package_names": payload.package_names,
+        "parser_version": provider.parser_version,
+        "auto_verification_enabled": provider.auto_verification_enabled,
+        "message": "تم تحديث قائمة التطبيقات. لم يتم تفعيل الاعتماد الآلي.",
+    }
 
 
 @router.post("/admin/devices")
@@ -525,7 +567,9 @@ async def approve_payer_wallet_identity(
             models.WalletTransaction.provider_id == identity.provider_id,
             models.WalletTransaction.sender_fingerprint == identity.phone_fingerprint,
             models.WalletTransaction.verification_status == "manually_verified",
-            models.WalletTransaction.provider_status.in_(("settled", "completed", "successful", "success")),
+            ~models.WalletTransaction.provider_status.in_((
+                "failed", "rejected", "reversed", "refunded", "cancelled", "expired", "declined",
+            )),
         )
         .order_by(models.WalletTransaction.id.desc())
     )
@@ -1054,8 +1098,10 @@ async def verify_wallet_transaction_manually(
         transaction.provider_reference,
     }:
         raise HTTPException(status_code=400, detail="معرف العملية لا يطابق معرف المزود المستخرج.")
-    if transaction.provider_status not in {"settled", "completed", "successful", "success"}:
-        raise HTTPException(status_code=409, detail="المزود لم يعلن حالة تسوية نهائية.")
+    if transaction.provider_status in {
+        "failed", "rejected", "reversed", "refunded", "cancelled", "expired", "declined"
+    }:
+        raise HTTPException(status_code=409, detail="المعاملة تحمل حالة فشل أو إلغاء ولا يمكن اعتمادها.")
     if not transaction.intent_id:
         raise HTTPException(status_code=409, detail="لم تتم مطابقة المعاملة بطلب دفع واحد؛ يلزم ربطها ومراجعتها أولاً.")
 
