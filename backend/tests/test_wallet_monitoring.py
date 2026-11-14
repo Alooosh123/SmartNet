@@ -36,6 +36,13 @@ def test_normalize_arabic_wallet_digits_and_mask():
     assert mask_wallet_identifier(value) == "***4567"
 
 
+def test_wallet_identifier_rejects_letters_and_unsupported_symbols():
+    with pytest.raises(ValueError, match="unsupported character"):
+        normalize_wallet_identifier("wallet-967777123456")
+    with pytest.raises(ValueError, match="unsupported character"):
+        normalize_wallet_identifier("967777/123456")
+
+
 def test_wallet_fingerprint_uses_keyed_digest(monkeypatch):
     monkeypatch.setattr(settings, "WALLET_IDENTITY_HMAC_SECRET", "h" * 48)
     first = wallet_fingerprint("+967 777 123 456")
