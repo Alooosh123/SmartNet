@@ -11,6 +11,7 @@ from database import models
 from database.database import Base
 from services.wallet_fulfillment import fulfill_wallet_payment_intent
 from services.wallet_monitoring import wallet_fingerprint
+from services.subscription_agent import PLANS
 
 
 async def _wallet_fixture(session):
@@ -111,6 +112,8 @@ async def test_renewal_extends_from_later_of_current_expiry_or_now_and_is_idempo
     async with Session() as session:
         now, client, intent, transaction = await _wallet_fixture(session)
         previous_expiry = client.subscription_expires
+        # The current catalogue may change after the customer creates the invoice.
+        monkeypatch.setitem(PLANS["monthly"], "days", 45)
         first = await fulfill_wallet_payment_intent(
             session,
             intent_id=intent.id,
