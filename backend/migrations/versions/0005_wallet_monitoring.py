@@ -26,7 +26,6 @@ def upgrade() -> None:
         sa.UniqueConstraint("code", name="uq_wallet_providers_code"),
     )
     op.create_index("ix_wallet_providers_id", "wallet_providers", ["id"])
-    op.create_index("ix_wallet_providers_code", "wallet_providers", ["code"])
 
     op.create_table(
         "wallet_monitor_devices",
@@ -232,6 +231,5 @@ def downgrade() -> None:
     op.drop_index("ix_wallet_monitor_devices_status", table_name="wallet_monitor_devices")
     op.drop_index("ix_wallet_monitor_devices_id", table_name="wallet_monitor_devices")
     op.drop_table("wallet_monitor_devices")
-    op.drop_index("ix_wallet_providers_code", table_name="wallet_providers")
     op.drop_index("ix_wallet_providers_id", table_name="wallet_providers")
     op.drop_table("wallet_providers")
