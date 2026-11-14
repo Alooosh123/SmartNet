@@ -119,7 +119,9 @@ async def fulfill_wallet_payment_intent(
     plan_info = PLANS.get(intent.plan)
     if not plan_info:
         raise ValueError("Payment intent references an unsupported subscription plan.")
-    days = int(plan_info["days"])
+    days = int(intent.duration_days)
+    if days < 1 or days > 3650:
+        raise ValueError("Payment intent contains an invalid snapshotted duration.")
 
     client = None
     registration = None
