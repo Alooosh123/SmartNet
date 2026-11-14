@@ -90,9 +90,26 @@ The first backend slice is implemented on `production-hardening`:
 Keep these values until the Android collector and a real wallet-specific adapter have passed acceptance:
 - `WALLET_MONITORING_ENABLED=false` by default. Enable only after setting a unique `WALLET_IDENTITY_HMAC_SECRET` (32+ random characters); production also requires an HTTPS `APP_PUBLIC_URL`.
 - `WALLET_AUTO_ACTIVATION_ENABLED=false`. The current application settings intentionally reject `true` because no production wallet parser or live acceptance test is registered.
-- The current provider registry stores package allowlists, but there are **no provider-specific parsers registered yet**. Events therefore remain `awaiting_provider_adapter` unless a reviewed parser is added in trusted backend code.
-- No Android APK/NotificationListenerService or subscription auto-fulfilment worker is implemented yet. The fulfilment table is preparatory schema only.
-- Existing manual payment verification and separate administrator subscription approval remain the supported production path.
+- Migration `0005` seeds seven provider records: Jaib, Flousak, Jawali, Cash, One Cash, Al-Kuraimi Jawwal and Mobile Money. Android package allowlists start empty; set each exact installed app package via `PUT /api/v1/wallet-monitor/admin/providers/{provider_id}/packages` after verifying the app. Do not guess package IDs.
+- A shared Arabic receipt parser `arabic_receipt_v1` is registered for these provider codes. It extracts candidates in the shape of the supplied Jaib receipt, but the actual notification formats of the other six apps have not been verified. A receipt without an explicit settlement state is `receipt_only`, never auto-paid.
+- Kotlin Android source is present in `android/wallet-collector`, with minimum API 24 and target API 37. APK assembly and physical-device checks remain required before deployment.
+- The first-transfer and renewal fulfilment service is connected to manual finance verification. Existing manual review remains the only supported production activation path; automatic activation is still blocked.
+
+### Supported Yemeni wallet providers
+
+The migration seeds these provider records with no package names configured yet:
+
+| Provider code | Name |
+|---|---|
+| `jaib` | جيب |
+| `flousak` | فلوسك |
+| `jawali` | جوالي |
+| `cash` | كاش |
+| `one_cash` | ون كاش |
+| `alkuraimi_jawwal` | الكريمي جوال |
+| `mobile_money` | موبايل موني |
+
+After verifying each installed Android app, set its package name with `PUT /api/v1/wallet-monitor/admin/providers/{provider_id}/packages`. The Android collector supports API 24+ and targets API 37; see `android/wallet-collector/README.md`.
 
 ### Initial setup sequence
 
@@ -102,7 +119,7 @@ Keep these values until the Android collector and a real wallet-specific adapter
 4. As administrator, register the wallet provider with the exact Android package name from the verified application listing, then create the dedicated monitor device.
 5. Transfer the one-time `device_token` to the dedicated phone through a secure channel. Never include it in screenshots, tickets or repository files.
 6. Register the receiving wallet account with its provider, device and currency. Add the payer number through the registration token or authenticated client route. The identity approval endpoint rejects approval until a first matching transaction is manually verified against the actual wallet app; after approval it fulfils that first registration/renewal exactly once.
-7. Keep incoming events in review until a provider-specific parser is implemented from sanitized real notification examples and passes shadow-mode plus duplicate/reversal tests.
+7. The shared Arabic receipt parser can produce candidates for receipt-like text. Keep every candidate under human review until the actual Android notification pattern and status semantics for that provider have been validated with sanitized examples and shadow-mode duplicate/reversal tests.
 
 ### Android dedicated phone collector
 
