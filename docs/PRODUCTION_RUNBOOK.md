@@ -76,7 +76,44 @@ Restore scripts require explicit confirmation. Verify SHA256 and rehearse restor
 - Back up the database and uploads and perform a successful restore before launch.
 - Rotate credentials previously committed in Git history; removing files from the current tree does not remove history.
 
-## Wallet Monitoring Agent (design)
+## Wallet Monitoring Agent (backend phase 1)
 
-The design and phased acceptance requirements for the dedicated Android notification collector, wallet identity approval, deterministic payment matching, and idempotent subscription activation/renewal are documented in [docs/WALLET_MONITORING_AGENT.md](WALLET_MONITORING_AGENT.md). This design is not a live integration: manual verification remains the production fallback until each wallet adapter passes shadow-mode and live acceptance.
+The first backend slice is implemented on `production-hardening`:
+- MariaDB/SQLite-compatible models and Alembic migration `0005_wallet_monitoring` for provider registry, dedicated devices, receiving accounts, payer identities, payment intents, notification events, transaction candidates, reviews and fulfilment records.
+- Admin APIs to register provider package allowlists, create/revoke phone devices, configure receiving accounts, approve/revoke payer identities, and inspect events.
+- Registration-token and authenticated-client APIs to register payer wallet identities; registration approval links pre-registered wallet identities to the new Client record.
+- Device bearer-token APIs for heartbeat and notification events. Device tokens are stored as SHA-256 hashes and displayed once. Event UUIDs are idempotent. Notification title/body are parsed in memory and are not persisted; a payload SHA-256 and normalized candidate fields are retained.
+- Candidate matching binds provider, receiving account, the registered device, sender identity, exact amount/currency and one open Payment Intent. Candidate records remain pending review.
+
+### Fail-closed configuration
+
+Keep these values until the Android collector and a real wallet-specific adapter have passed acceptance:
+- `WALLET_MONITORING_ENABLED=false` by default. Enable only after setting a unique `WALLET_IDENTITY_HMAC_SECRET` (32+ random characters); production also requires an HTTPS `APP_PUBLIC_URL`.
+- `WALLET_AUTO_ACTIVATION_ENABLED=false`. The current application settings intentionally reject `true` because no production wallet parser or live acceptance test is registered.
+- The current provider registry stores package allowlists, but there are **no provider-specific parsers registered yet**. Events therefore remain `awaiting_provider_adapter` unless a reviewed parser is added in trusted backend code.
+- No Android APK/NotificationListenerService or subscription auto-fulfilment worker is implemented yet. The fulfilment table is preparatory schema only.
+- Existing manual payment verification and separate administrator subscription approval remain the supported production path.
+
+### Initial setup sequence
+
+1. Apply `alembic upgrade head` after backing up MariaDB and rehearsing the migration in staging.
+2. Keep automatic activation disabled. Generate a unique random `WALLET_IDENTITY_HMAC_SECRET` in the protected service environment; do not place it in Git or chat.
+3. Set `WALLET_MONITORING_ENABLED=true` only when the Android collector is ready to use the HTTPS backend.
+4. As administrator, register the wallet provider with the exact Android package name from the verified application listing, then create the dedicated monitor device.
+5. Transfer the one-time `device_token` to the dedicated phone through a secure channel. Never include it in screenshots, tickets or repository files.
+6. Register the receiving wallet account with its provider, device and currency. Add the payer number through the registration token or authenticated client route; approve it only after an operator has verified ownership and the first transfer in the actual wallet app.
+7. Keep incoming events in review until a provider-specific parser is implemented from sanitized real notification examples and passes shadow-mode plus duplicate/reversal tests.
+
+### API paths
+
+- `POST /api/v1/wallet-monitor/admin/providers`
+- `POST /api/v1/wallet-monitor/admin/devices` and `POST /api/v1/wallet-monitor/admin/devices/{id}/revoke`
+- `POST /api/v1/wallet-monitor/admin/receiving-wallets`
+- `POST /api/v1/wallet-monitor/registrations/{registration_id}/payer-wallets`
+- `POST /api/v1/wallet-monitor/admin/payer-wallets/{id}/approve`
+- `POST /api/v1/wallet-monitor/registrations/{registration_id}/payment-intents`
+- `POST /api/v1/wallet-monitor/device/heartbeat` and `POST /api/v1/wallet-monitor/device/events`
+- `GET /api/v1/wallet-monitor/admin/events`
+
+See [docs/WALLET_MONITORING_AGENT.md](WALLET_MONITORING_AGENT.md) for the full decision model and remaining phases.
 
