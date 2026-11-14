@@ -126,7 +126,7 @@ class NetworkActionRequest(Base):
 class WalletProvider(Base):
     __tablename__ = "wallet_providers"
     id = Column(Integer, primary_key=True, index=True)
-    code = Column(String(64), unique=True, nullable=False, index=True)
+    code = Column(String(64), unique=True, nullable=False)
     display_name = Column(String(120), nullable=False)
     package_allowlist = Column(Text, nullable=False)
     parser_version = Column(String(64), nullable=True)
@@ -241,11 +241,12 @@ class WalletTransaction(Base):
             "provider_id", "receiving_wallet_id", "provider_reference",
             name="uq_wallet_provider_reference",
         ),
+        UniqueConstraint("event_id", name="uq_wallet_transaction_event"),
     )
     id = Column(Integer, primary_key=True, index=True)
     provider_id = Column(Integer, ForeignKey("wallet_providers.id"), nullable=False, index=True)
     receiving_wallet_id = Column(Integer, ForeignKey("receiving_wallet_accounts.id"), nullable=False)
-    event_id = Column(Integer, ForeignKey("wallet_notification_events.id"), nullable=True, unique=True)
+    event_id = Column(Integer, ForeignKey("wallet_notification_events.id"), nullable=True)
     intent_id = Column(Integer, ForeignKey("wallet_payment_intents.id"), nullable=True, index=True)
     provider_transaction_id = Column(String(160), nullable=True)
     provider_reference = Column(String(160), nullable=True)
@@ -261,9 +262,13 @@ class WalletTransaction(Base):
 
 class WalletPaymentReview(Base):
     __tablename__ = "wallet_payment_reviews"
+    __table_args__ = (
+        UniqueConstraint("event_id", name="uq_wallet_review_event"),
+        UniqueConstraint("transaction_id", name="uq_wallet_review_transaction"),
+    )
     id = Column(Integer, primary_key=True, index=True)
-    event_id = Column(Integer, ForeignKey("wallet_notification_events.id"), nullable=True, unique=True)
-    transaction_id = Column(Integer, ForeignKey("wallet_transactions.id"), nullable=True, unique=True)
+    event_id = Column(Integer, ForeignKey("wallet_notification_events.id"), nullable=True)
+    transaction_id = Column(Integer, ForeignKey("wallet_transactions.id"), nullable=True)
     reason_code = Column(String(64), nullable=False)
     status = Column(String(24), default="open", nullable=False, index=True)
     decision = Column(String(24), nullable=True)
