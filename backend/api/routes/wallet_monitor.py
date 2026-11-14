@@ -591,6 +591,8 @@ async def _create_payment_intent(
         registration_id = None
     if amount <= 0:
         raise HTTPException(status_code=400, detail="قيمة طلب الدفع غير صالحة.")
+    if receiving.currency.upper() != currency:
+        raise HTTPException(status_code=409, detail="عملة حساب الاستقبال لا تطابق عملة طلب الدفع.")
     intent = models.WalletPaymentIntent(
         client_id=client_id,
         registration_id=registration_id,
