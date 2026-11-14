@@ -27,6 +27,76 @@ def upgrade() -> None:
     )
     op.create_index("ix_wallet_providers_id", "wallet_providers", ["id"])
 
+    # Seed the seven requested Yemen wallet providers. Package names deliberately
+    # remain empty until an administrator confirms the exact installed Android app ID.
+    wallet_provider_table = sa.table(
+        "wallet_providers",
+        sa.column("code", sa.String(length=64)),
+        sa.column("display_name", sa.String(length=120)),
+        sa.column("package_allowlist", sa.Text()),
+        sa.column("parser_version", sa.String(length=64)),
+        sa.column("enabled", sa.Boolean()),
+        sa.column("auto_verification_enabled", sa.Boolean()),
+    )
+    op.bulk_insert(wallet_provider_table, [
+        {
+            "code": "jaib",
+            "display_name": "جيب",
+            "package_allowlist": "[]",
+            "parser_version": "arabic_receipt_v1",
+            "enabled": True,
+            "auto_verification_enabled": False,
+        },
+        {
+            "code": "flousak",
+            "display_name": "فلوسك",
+            "package_allowlist": "[]",
+            "parser_version": "arabic_receipt_v1",
+            "enabled": True,
+            "auto_verification_enabled": False,
+        },
+        {
+            "code": "jawali",
+            "display_name": "جوالي",
+            "package_allowlist": "[]",
+            "parser_version": "arabic_receipt_v1",
+            "enabled": True,
+            "auto_verification_enabled": False,
+        },
+        {
+            "code": "cash",
+            "display_name": "كاش",
+            "package_allowlist": "[]",
+            "parser_version": "arabic_receipt_v1",
+            "enabled": True,
+            "auto_verification_enabled": False,
+        },
+        {
+            "code": "one_cash",
+            "display_name": "ون كاش",
+            "package_allowlist": "[]",
+            "parser_version": "arabic_receipt_v1",
+            "enabled": True,
+            "auto_verification_enabled": False,
+        },
+        {
+            "code": "alkuraimi_jawwal",
+            "display_name": "الكريمي جوال",
+            "package_allowlist": "[]",
+            "parser_version": "arabic_receipt_v1",
+            "enabled": True,
+            "auto_verification_enabled": False,
+        },
+        {
+            "code": "mobile_money",
+            "display_name": "موبايل موني",
+            "package_allowlist": "[]",
+            "parser_version": "arabic_receipt_v1",
+            "enabled": True,
+            "auto_verification_enabled": False,
+        },
+    ])
+
     op.create_table(
         "wallet_monitor_devices",
         sa.Column("id", sa.Integer(), primary_key=True),
