@@ -8,29 +8,48 @@ import android.content.ComponentName
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantLock
 
 class WalletSyncJobService : JobService() {
-    @Volatile private var worker: Thread? = null
-    private val finished = AtomicBoolean(false)
+    private val workers = ConcurrentHashMap<Int, Thread>()
+    private val completionFlags = ConcurrentHashMap<Int, AtomicBoolean>()
+    private val syncLock = ReentrantLock()
 
     override fun onStartJob(params: JobParameters): Boolean {
-        finished.set(false)
-        worker = Thread({
+        val completed = AtomicBoolean(false)
+        completionFlags[params.jobId] = completed
+        val worker = Thread({
             val retry = try {
-                synchronize()
+                syncLock.lockInterruptibly()
+                try {
+                    synchronize()
+                } finally {
+                    syncLock.unlock()
+                }
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                true
             } catch (_: Exception) {
                 SecureStorage.setSyncStatus(this, "تعذر الاتصال بالخادم؛ ستتم إعادة المحاولة.")
                 true
             }
-            if (finished.compareAndSet(false, true)) jobFinished(params, retry)
-        }, "SmartNetWalletSync").also { it.start() }
+
+            workers.remove(params.jobId)
+            completionFlags.remove(params.jobId)
+            if (completed.compareAndSet(false, true)) {
+                jobFinished(params, retry)
+            }
+        }, "SmartNetWalletSync-${params.jobId}")
+        workers[params.jobId] = worker
+        worker.start()
         return true
     }
 
     override fun onStopJob(params: JobParameters): Boolean {
-        finished.set(true)
-        worker?.interrupt()
+        completionFlags.remove(params.jobId)?.set(true)
+        workers.remove(params.jobId)?.interrupt()
         return true
     }
 
