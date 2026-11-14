@@ -104,6 +104,12 @@ Keep these values until the Android collector and a real wallet-specific adapter
 6. Register the receiving wallet account with its provider, device and currency. Add the payer number through the registration token or authenticated client route. The identity approval endpoint rejects approval until a first matching transaction is manually verified against the actual wallet app; after approval it fulfils that first registration/renewal exactly once.
 7. Keep incoming events in review until a provider-specific parser is implemented from sanitized real notification examples and passes shadow-mode plus duplicate/reversal tests.
 
+### Android dedicated phone collector
+
+The first Kotlin collector app source is under `android/wallet-collector`. It uses NotificationListenerService, an Android Keystore-encrypted device token and offline event queue, and JobScheduler to retry delivery. Release builds require HTTPS; debug cleartext is limited in code to loopback/emulator hosts. The backend's `GET /api/v1/wallet-monitor/device/config` returns only the package allowlist associated with active receiving wallets assigned to that device.
+
+Build the debug APK with Android Studio using JDK 17, Gradle 9.6.0, AGP 9.4.0 and Android SDK Platform 36, or use the dedicated `Android Wallet Collector` GitHub Actions workflow. The APK is not yet certified against the user's physical phone or any real wallet app. Test Notification Access, background delivery, reboot recovery, delayed connectivity and queue recovery on the target device before deployment.
+
 ### API paths
 
 - `POST /api/v1/wallet-monitor/admin/providers`
@@ -113,6 +119,7 @@ Keep these values until the Android collector and a real wallet-specific adapter
 - `POST /api/v1/wallet-monitor/admin/payer-wallets/{id}/approve`
 - `POST /api/v1/wallet-monitor/registrations/{registration_id}/payment-intents`
 - `POST /api/v1/wallet-monitor/device/heartbeat` and `POST /api/v1/wallet-monitor/device/events`
+- `GET /api/v1/wallet-monitor/device/config` (phone-scoped allowlisted packages)
 - `GET /api/v1/wallet-monitor/admin/events` and `GET /api/v1/wallet-monitor/admin/transactions`
 - `POST /api/v1/wallet-monitor/admin/transactions/{transaction_id}/verify` (manual verification against the actual wallet app; first-transfer fulfilment waits for payer identity approval)
 
