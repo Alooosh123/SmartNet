@@ -412,6 +412,68 @@ async def add_client_payer_wallet(
     )
 
 
+
+
+@router.get("/admin/payer-wallets")
+async def list_payer_wallet_identities(
+    db: AsyncSession = Depends(database.get_db),
+    _admin=Depends(get_current_admin),
+):
+    result = await db.execute(
+        select(models.PayerWalletIdentity).order_by(models.PayerWalletIdentity.id.desc())
+    )
+    return [{
+        "id": item.id,
+        "client_id": item.client_id,
+        "registration_id": item.registration_id,
+        "provider_id": item.provider_id,
+        "masked_phone": item.masked_phone,
+        "owner_name": item.owner_name,
+        "status": item.status,
+        "approved_by": item.approved_by,
+        "approved_at": item.approved_at,
+        "created_at": item.created_at,
+    } for item in result.scalars().all()]
+
+
+@router.get("/admin/receiving-wallets")
+async def list_receiving_wallet_accounts(
+    db: AsyncSession = Depends(database.get_db),
+    _admin=Depends(get_current_admin),
+):
+    result = await db.execute(
+        select(models.ReceivingWalletAccount).order_by(models.ReceivingWalletAccount.id.desc())
+    )
+    return [{
+        "id": item.id,
+        "provider_id": item.provider_id,
+        "device_id": item.device_id,
+        "account_label": item.account_label,
+        "masked_identifier": item.masked_identifier,
+        "currency": item.currency,
+        "is_active": item.is_active,
+    } for item in result.scalars().all()]
+
+
+@router.post("/admin/receiving-wallets/{account_id}/disable")
+async def disable_receiving_wallet_account(
+    account_id: int,
+    db: AsyncSession = Depends(database.get_db),
+    admin=Depends(get_current_admin),
+):
+    account = await db.get(models.ReceivingWalletAccount, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="حساب الاستقبال غير موجود.")
+    account.is_active = False
+    db.add(models.AuditLog(
+        action="receiving_wallet_account_disabled",
+        performed_by=admin.username,
+        details=f"Disabled receiving wallet account #{account.id} ({account.masked_identifier}).",
+    ))
+    await db.commit()
+    return {"ok": True, "account_id": account.id, "is_active": False}
+
+
 @router.post("/admin/payer-wallets/{identity_id}/approve")
 async def approve_payer_wallet_identity(
     identity_id: int,
