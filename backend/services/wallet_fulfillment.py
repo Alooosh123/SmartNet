@@ -77,8 +77,14 @@ async def fulfill_wallet_payment_intent(
         raise ValueError("Wallet transaction is not linked to this payment intent.")
     if transaction.verification_status not in {"provider_verified", "manually_verified"}:
         raise ValueError("Wallet transaction has not passed trusted financial verification.")
-    if transaction.provider_status not in SETTLED_STATUSES:
-        raise ValueError("Wallet provider has not reported a final settled transaction.")
+    if transaction.verification_status == "provider_verified":
+        if transaction.provider_status not in SETTLED_STATUSES:
+            raise ValueError("Provider-verified transactions must carry an explicit final settled status.")
+    elif transaction.verification_status == "manually_verified":
+        if transaction.provider_status in {
+            "failed", "rejected", "reversed", "refunded", "cancelled", "expired", "declined"
+        }:
+            raise ValueError("A failed, reversed or cancelled transaction cannot be manually fulfilled.")
     if not transaction.provider_transaction_id and not transaction.provider_reference:
         raise ValueError("A stable provider transaction ID or reference is required.")
     if transaction.amount != intent.amount or transaction.currency != intent.currency:
