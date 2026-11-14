@@ -1,7 +1,8 @@
 """Wallet notification intake, payer identity approval and payment-intent APIs.
 
-This module deliberately does not trust Android notification text as proof of payment.
-Provider parsers must be shipped and reviewed individually before any automated fulfilment.
+This module treats Android notification and receipt text as untrusted candidates.
+Known providers use a shared Arabic receipt extractor; every payment still requires
+review in the actual wallet app because receipt fields alone do not prove settlement.
 """
 from __future__ import annotations
 
