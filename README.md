@@ -108,3 +108,8 @@ npm run test:e2e
 راجع SECURITY.md وdocs/PRODUCTION_RUNBOOK.md وdeploy/README.md.
 
 </div>
+
+
+## تطبيق الهاتف المخصص
+
+أضيف مشروع Android أولي في `android/wallet-collector` لالتقاط إشعارات حزم المحافظ المسموح بها فقط، وتخزينها محلياً بتشفير Android Keystore وإرسالها عبر HTTPS عند توفر الاتصال. التطبيق لا يملك أي صلاحية لاعتماد الدفع أو تفعيل الاشتراك. راجع [دليل تطبيق Wallet Collector](android/wallet-collector/README.md). يتطلب قبل التشغيل تسجيل الهاتف والمزود وحساب الاستقبال في SmartNet وتفعيل `WALLET_MONITORING_ENABLED` بعد تجهيز إعدادات الإنتاج.
