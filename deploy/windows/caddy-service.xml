@@ -1,0 +1,15 @@
+<service>
+  <id>smartnet-caddy</id>
+  <name>SmartNet HTTPS Gateway</name>
+  <description>Caddy reverse proxy and static frontend server</description>
+  <executable>C:\Program Files\Caddy\caddy.exe</executable>
+  <arguments>run --config %BASE%\..\..\Caddyfile</arguments>
+  <workingdirectory>%BASE%\..\..</workingdirectory>
+  <env name="SMARTNET_DOMAIN" value="smartnet.example.com"/>
+  <env name="SMARTNET_WEB_ROOT" value="C:/SmartNet/frontend/dist"/>
+  <startmode>Automatic</startmode>
+  <onfailure action="restart" delay="5 sec"/>
+  <log mode="roll-by-time">
+    <pattern>yyyy-MM-dd</pattern>
+  </log>
+</service>
