@@ -68,6 +68,7 @@ async def _wallet_fixture(session):
         receiving_wallet_id=receiving.id,
         intent_type="renewal",
         plan="monthly",
+        duration_days=30,
         amount=Decimal("20.00"),
         currency="USD",
         reference_token="SN-RENEWAL-INTENT-001",
