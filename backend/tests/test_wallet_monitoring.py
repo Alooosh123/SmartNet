@@ -7,7 +7,7 @@ intake, masked identity handling and the fail-closed adapter state.
 import asyncio
 import hashlib
 from decimal import Decimal
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -260,13 +260,15 @@ def test_wallet_device_registration_identity_and_event_intake(wallet_api):
     assert device_config.json()["allowed_packages"] == ["com.example.jaib"]
     assert device_config.json()["automatic_activation"] is False
 
-    receipt_text = """
+    local_yemen_time = datetime.now(timezone(timedelta(hours=3)))
+    receipt_time = local_yemen_time.strftime("%d/%m/%Y (%H:%M)")
+    receipt_text = f"""
     إيصال العملية
     1,000 ريال يمني
     رقم مرجع العملية 12345678901265
     العملية
     تحويل مشترك
-    تاريخ العملية 10/10/2026 (18:37)
+    تاريخ العملية {receipt_time}
     المستفيد
     مستفيد تجريبي
     +967 777 000 111
@@ -299,19 +301,46 @@ def test_wallet_device_registration_identity_and_event_intake(wallet_api):
     assert duplicate.status_code == 200, duplicate.text
     assert duplicate.json()["duplicate"] is True
 
+    # A receipt dated before this Payment Intent must never match the new invoice,
+    # even when sender, receiver, amount and currency are otherwise identical.
+    stale_receipt = receipt_text.replace(receipt_time, "10/10/2026 (18:37)").replace(
+        "12345678901265", "12345678901266"
+    )
+    stale_event_payload = {
+        **event_payload,
+        "event_uuid": "6ca1c8c1-7db2-4c44-9d60-3e7c6b86db45",
+        "body": stale_receipt,
+    }
+    stale_received = client.post(
+        "/api/v1/wallet-monitor/device/events",
+        headers=device_headers,
+        json=stale_event_payload,
+    )
+    assert stale_received.status_code == 200, stale_received.text
+
     event_list = client.get("/api/v1/wallet-monitor/admin/events", headers=admin_headers)
     assert event_list.status_code == 200, event_list.text
-    assert len(event_list.json()) == 1
-    event_record = event_list.json()[0]
+    assert len(event_list.json()) == 2
+    event_record = next(
+        item for item in event_list.json()
+        if item["event_uuid"] == event_payload["event_uuid"]
+    )
+    stale_event_record = next(
+        item for item in event_list.json()
+        if item["event_uuid"] == stale_event_payload["event_uuid"]
+    )
     assert event_record["payload_sha256"]
     assert "body" not in event_record
     assert "title" not in event_record
+    assert stale_event_record["reason_code"] == "transaction_outside_payment_window"
 
     transactions = client.get("/api/v1/wallet-monitor/admin/transactions", headers=admin_headers)
     assert transactions.status_code == 200, transactions.text
-    assert len(transactions.json()) == 1
-    transaction = transactions.json()[0]
+    assert len(transactions.json()) == 2
+    transaction = next(item for item in transactions.json() if item["intent_id"] is not None)
+    stale_transaction = next(item for item in transactions.json() if item["intent_id"] is None)
     assert transaction["verification_status"] == "pending_review"
+    assert stale_transaction["verification_status"] == "pending_review"
 
     first_verification = client.post(
         f"/api/v1/wallet-monitor/admin/transactions/{transaction['id']}/verify",
