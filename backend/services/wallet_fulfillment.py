@@ -99,6 +99,16 @@ async def fulfill_wallet_payment_intent(
         raise ValueError("Receiving wallet provider/currency does not match the payment intent.")
     if not payer or payer.status != "active" or payer.provider_id != provider.id:
         raise ValueError("Payer wallet identity is not approved and active.")
+    if transaction.sender_fingerprint != payer.phone_fingerprint:
+        raise ValueError("Transaction sender does not match the approved payer wallet identity.")
+    if transaction.recipient_fingerprint != receiving.account_fingerprint:
+        raise ValueError("Transaction recipient does not match the configured receiving wallet.")
+    if transaction.provider_id != receiving.provider_id:
+        raise ValueError("Transaction provider does not match the receiving wallet provider.")
+    if transaction.event_id:
+        event = await db.get(models.WalletNotificationEvent, transaction.event_id)
+        if not event or event.device_id != receiving.device_id:
+            raise ValueError("Notification did not originate from the phone assigned to this receiving wallet.")
 
     if allow_automatic:
         if not settings.WALLET_AUTO_ACTIVATION_ENABLED:
