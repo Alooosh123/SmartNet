@@ -112,6 +112,8 @@ async def test_renewal_extends_from_later_of_current_expiry_or_now_and_is_idempo
     async with Session() as session:
         now, client, intent, transaction = await _wallet_fixture(session)
         previous_expiry = client.subscription_expires
+        if previous_expiry.tzinfo is None:
+            previous_expiry = previous_expiry.replace(tzinfo=timezone.utc)
         # The current catalogue may change after the customer creates the invoice.
         monkeypatch.setitem(PLANS["monthly"], "days", 45)
         first = await fulfill_wallet_payment_intent(
@@ -124,8 +126,11 @@ async def test_renewal_extends_from_later_of_current_expiry_or_now_and_is_idempo
         )
         assert first["idempotent_replay"] is False
         refreshed_client = await session.get(models.Client, client.id)
+        actual_expiry = refreshed_client.subscription_expires
+        if actual_expiry.tzinfo is None:
+            actual_expiry = actual_expiry.replace(tzinfo=timezone.utc)
         expected = previous_expiry + timedelta(days=30)
-        assert refreshed_client.subscription_expires == expected
+        assert actual_expiry == expected
 
         second = await fulfill_wallet_payment_intent(
             session,
@@ -138,7 +143,10 @@ async def test_renewal_extends_from_later_of_current_expiry_or_now_and_is_idempo
         assert second["idempotent_replay"] is True
         assert second["fulfillment_id"] == first["fulfillment_id"]
         refreshed_client = await session.get(models.Client, client.id)
-        assert refreshed_client.subscription_expires == expected
+        replay_expiry = refreshed_client.subscription_expires
+        if replay_expiry.tzinfo is None:
+            replay_expiry = replay_expiry.replace(tzinfo=timezone.utc)
+        assert replay_expiry == expected
 
         rows = await session.execute(select(models.WalletSubscriptionFulfillment))
         assert len(rows.scalars().all()) == 1
