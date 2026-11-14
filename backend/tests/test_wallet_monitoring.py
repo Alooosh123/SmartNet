@@ -200,6 +200,14 @@ def test_wallet_device_registration_identity_and_event_intake(wallet_api):
     assert heartbeat.status_code == 200, heartbeat.text
     assert heartbeat.json()["notification_access_granted"] is True
 
+    device_config = client.get(
+        "/api/v1/wallet-monitor/device/config",
+        headers=device_headers,
+    )
+    assert device_config.status_code == 200, device_config.text
+    assert device_config.json()["allowed_packages"] == ["com.example.wallet"]
+    assert device_config.json()["automatic_activation"] is False
+
     register_notification_parser(
         "test_wallet",
         lambda title, body: ParsedWalletTransfer(
