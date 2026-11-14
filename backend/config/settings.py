@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     PAYMENT_DEMO_MODE: bool = True
     APP_PUBLIC_URL: str = "http://127.0.0.1:5173"
 
+    # Dedicated Android notification collector. Automatic activation is deliberately
+    # unavailable until a provider-specific, tested settlement parser is shipped.
+    WALLET_MONITORING_ENABLED: bool = False
+    WALLET_AUTO_ACTIVATION_ENABLED: bool = False
+    WALLET_IDENTITY_HMAC_SECRET: Optional[str] = None
+    WALLET_DEVICE_CLOCK_SKEW_SECONDS: int = 300
+
     DASHBOARD_USERNAME: str = "admin"
     DASHBOARD_PASSWORD: str = "dev-only-SmartNet-Admin-Change-This-2026!"
 
@@ -74,6 +81,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_configuration(self) -> "Settings":
+        if self.WALLET_AUTO_ACTIVATION_ENABLED:
+            raise ValueError(
+                "WALLET_AUTO_ACTIVATION_ENABLED is fail-closed until a provider-specific "
+                "notification parser and live acceptance suite are implemented."
+            )
+        if self.WALLET_DEVICE_CLOCK_SKEW_SECONDS < 30 or self.WALLET_DEVICE_CLOCK_SKEW_SECONDS > 1800:
+            raise ValueError("WALLET_DEVICE_CLOCK_SKEW_SECONDS must be between 30 and 1800.")
+
         if self.ENVIRONMENT.lower() == "production":
             insecure = {
                 "SECRET_KEY": self.SECRET_KEY,
@@ -102,7 +117,7 @@ class Settings(BaseSettings):
                 raise ValueError("Set a dedicated non-default MIKROTIK_USERNAME for operational commands.")
             if self.NETWORK_OBSERVER_ENABLED:
                 if not self.MIKROTIK_READONLY_USERNAME or not self.MIKROTIK_READONLY_PASSWORD:
-                    raise ValueError("Read-only MikroTik API credentials are required when the Network Observer is enabled.")
+                    raise ValueError("Read-only RouterOS API credentials are required when the Network Observer is enabled.")
                 if self.MIKROTIK_READONLY_USERNAME == self.MIKROTIK_USERNAME:
                     raise ValueError("Use a separate read-only MikroTik account for network monitoring.")
                 if self.MIKROTIK_READONLY_PASSWORD == self.MIKROTIK_PASSWORD:
@@ -136,6 +151,12 @@ class Settings(BaseSettings):
                 raise ValueError("At least one exact HTTPS CORS origin is required in production.")
             if any(not origin.startswith("https://") for origin in self.CORS_ORIGINS):
                 raise ValueError("Production CORS_ORIGINS must contain only HTTPS origins.")
+            if self.WALLET_MONITORING_ENABLED:
+                if not self.WALLET_IDENTITY_HMAC_SECRET or len(self.WALLET_IDENTITY_HMAC_SECRET) < 32:
+                    raise ValueError("A unique 32+ character WALLET_IDENTITY_HMAC_SECRET is required when wallet monitoring is enabled.")
+                if not self.APP_PUBLIC_URL.startswith("https://"):
+                    raise ValueError("APP_PUBLIC_URL must use HTTPS when wallet monitoring is enabled.")
+
         if self.NETWORK_OBSERVER_INTERVAL_SECONDS < 15:
             raise ValueError("NETWORK_OBSERVER_INTERVAL_SECONDS must be at least 15 seconds.")
         if self.NETWORK_OBSERVER_HISTORY_LIMIT < 10:
