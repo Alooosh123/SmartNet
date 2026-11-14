@@ -93,6 +93,7 @@ def upgrade() -> None:
         sa.Column("receiving_wallet_id", sa.Integer(), sa.ForeignKey("receiving_wallet_accounts.id"), nullable=False),
         sa.Column("intent_type", sa.String(length=24), nullable=False),
         sa.Column("plan", sa.String(length=40), nullable=False),
+        sa.Column("duration_days", sa.Integer(), nullable=False),
         sa.Column("amount", sa.Numeric(12, 2), nullable=False),
         sa.Column("currency", sa.String(length=3), nullable=False),
         sa.Column("reference_token", sa.String(length=80), nullable=False),
