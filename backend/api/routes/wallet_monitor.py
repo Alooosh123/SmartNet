@@ -721,6 +721,48 @@ async def _create_payment_intent(
     }
 
 
+@router.get("/device/config")
+async def get_wallet_device_config(
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(database.get_db),
+):
+    """Return only the allowlisted wallet packages assigned to this device."""
+    _require_monitoring()
+    device = await _get_device_from_authorization(authorization, db)
+    result = await db.execute(
+        select(models.ReceivingWalletAccount, models.WalletProvider)
+        .join(models.WalletProvider, models.WalletProvider.id == models.ReceivingWalletAccount.provider_id)
+        .where(
+            models.ReceivingWalletAccount.device_id == device.id,
+            models.ReceivingWalletAccount.is_active.is_(True),
+            models.WalletProvider.enabled.is_(True),
+        )
+    )
+    packages_by_provider = {}
+    for account, provider in result.all():
+        try:
+            packages = json.loads(provider.package_allowlist)
+        except (TypeError, json.JSONDecodeError):
+            packages = []
+        packages_by_provider.setdefault(provider.code, set()).update(
+            package for package in packages if isinstance(package, str)
+        )
+    providers = [
+        {"code": code, "package_names": sorted(packages)}
+        for code, packages in sorted(packages_by_provider.items())
+    ]
+    allowed_packages = sorted({
+        package for provider in providers for package in provider["package_names"]
+    })
+    return {
+        "device_uuid": device.device_uuid,
+        "allowed_packages": allowed_packages,
+        "providers": providers,
+        "automatic_activation": False,
+        "server_time": datetime.now(timezone.utc),
+    }
+
+
 @router.post("/device/heartbeat")
 async def wallet_device_heartbeat(
     payload: DeviceHeartbeat,
