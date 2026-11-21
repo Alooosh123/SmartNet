@@ -19,8 +19,10 @@ class MikroTikService:
         ]
 
     def _get_api(self):
-        if settings.MIKROTIK_DEMO_MODE or not ROUTEROS_AVAILABLE:
+        if settings.MIKROTIK_DEMO_MODE:
             return None
+        if not ROUTEROS_AVAILABLE:
+            raise RuntimeError("routeros_api is required when MIKROTIK_DEMO_MODE is disabled.")
         connection = routeros_api.RouterOsApiPool(
             settings.MIKROTIK_HOST,
             username=settings.MIKROTIK_USERNAME,
@@ -31,7 +33,7 @@ class MikroTikService:
         return connection
 
     def get_status(self):
-        if settings.MIKROTIK_DEMO_MODE or not ROUTEROS_AVAILABLE:
+        if settings.MIKROTIK_DEMO_MODE:
             return {
                 "platform": "MikroTik RouterOS (Demo)",
                 "board-name": "RB750Gr3 (Demo)",
@@ -98,7 +100,7 @@ class MikroTikService:
             password = ''.join(random.choices(string.digits, k=length))
             cards.append({'username': username, 'password': password, 'profile': profile})
             
-        if not settings.MIKROTIK_DEMO_MODE and ROUTEROS_AVAILABLE:
+        if not settings.MIKROTIK_DEMO_MODE:
             connection = self._get_api()
             try:
                 api = connection.get_api()

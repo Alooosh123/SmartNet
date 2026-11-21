@@ -70,7 +70,10 @@ assert resp_unauth.status_code == 401
 print('PASS: Webhook confirmation correctly rejected without secret!')
 
 # Confirm with correct secret
-resp_confirm = client.post(BASE + f'/auth/registrations/{reg_id}/confirm?days=30&secret=smartnet-webhook-secret-key')
+resp_confirm = client.post(
+    BASE + f'/auth/registrations/{reg_id}/confirm?days=30&payment_ref=TEST-TRANSACTION-{reg_id}',
+    headers={'X-Webhook-Secret': 'smartnet-webhook-secret-key'}
+)
 print('Authorized Webhook Confirm ->', resp_confirm.status_code, resp_confirm.json())
 assert resp_confirm.status_code == 200
 assert resp_confirm.json().get('paid') is True

@@ -1,0 +1,100 @@
+{
+  "project": "SmartNet",
+  "repository": "Alooosh123/SmartNet",
+  "branch": "automation/n8n-agent-foundation",
+  "locale": "ar-YE",
+  "workflow_contract": "POST JSON webhook; JSON response; all workflows inactive after import.",
+  "agents": [
+    {
+      "id": "00",
+      "name": "SmartNet Agent 00 - Supervisor",
+      "file": "workflows/00-supervisor.json",
+      "webhook_path": "/webhook/smartnet/agents/00-supervisor",
+      "description": "Routes named tasks to agent webhook paths. Never executes privileged work."
+    },
+    {
+      "id": "01",
+      "name": "SmartNet Agent 01 - Repository Auditor",
+      "file": "workflows/01-repository-auditor.json",
+      "webhook_path": "/webhook/smartnet/agents/01-repository-auditor",
+      "description": "Read-only GitHub tree inventory."
+    },
+    {
+      "id": "02",
+      "name": "SmartNet Agent 02 - Security Auditor",
+      "file": "workflows/02-security-auditor.json",
+      "webhook_path": "/webhook/smartnet/agents/02-security-auditor",
+      "description": "Read-only path hygiene scan. Not a source secret scan."
+    },
+    {
+      "id": "03",
+      "name": "SmartNet Agent 03 - RBAC Reviewer",
+      "file": "workflows/03-rbac-reviewer.json",
+      "webhook_path": "/webhook/smartnet/agents/03-rbac-reviewer",
+      "description": "Reviews a supplied role-permission matrix."
+    },
+    {
+      "id": "04",
+      "name": "SmartNet Agent 04 - Database & Backup Reviewer",
+      "file": "workflows/04-database-backup-reviewer.json",
+      "webhook_path": "/webhook/smartnet/agents/04-database-backup-reviewer",
+      "description": "Checks operator-supplied backup and restore evidence."
+    },
+    {
+      "id": "05",
+      "name": "SmartNet Agent 05 - MikroTik Integration Test Gate",
+      "file": "workflows/05-mikrotik-test-gate.json",
+      "webhook_path": "/webhook/smartnet/agents/05-mikrotik-test-gate",
+      "description": "Validates isolated test prerequisites; never runs RouterOS commands."
+    },
+    {
+      "id": "06",
+      "name": "SmartNet Agent 06 - Backend Health Monitor",
+      "file": "workflows/06-backend-health-monitor.json",
+      "webhook_path": "/webhook/smartnet/agents/06-backend-health-monitor",
+      "description": "GET /api/health only; does not test router/database."
+    },
+    {
+      "id": "07",
+      "name": "SmartNet Agent 07 - Network Diagnosis Advisor",
+      "file": "workflows/07-network-diagnosis-advisor.json",
+      "webhook_path": "/webhook/smartnet/agents/07-network-diagnosis-advisor",
+      "description": "Rule-based recommendations only; no RouterOS commands."
+    },
+    {
+      "id": "08",
+      "name": "SmartNet Agent 08 - Payment Intake Guard",
+      "file": "workflows/08-payment-intake-guard.json",
+      "webhook_path": "/webhook/smartnet/agents/08-payment-intake-guard",
+      "description": "Validates shape only; never confirms payment or activates account."
+    },
+    {
+      "id": "09",
+      "name": "SmartNet Agent 09 - Financial Reconciliation",
+      "file": "workflows/09-financial-reconciliation.json",
+      "webhook_path": "/webhook/smartnet/agents/09-financial-reconciliation",
+      "description": "Compares provided records; never writes the ledger."
+    },
+    {
+      "id": "10",
+      "name": "SmartNet Agent 10 - Human Approval Gate",
+      "file": "workflows/10-human-approval-gate.json",
+      "webhook_path": "/webhook/smartnet/agents/10-human-approval-gate",
+      "description": "Captures approval request; does not execute action."
+    },
+    {
+      "id": "11",
+      "name": "SmartNet Agent 11 - QA Safe Smoke Test",
+      "file": "workflows/11-qa-smoke-test.json",
+      "webhook_path": "/webhook/smartnet/agents/11-qa-smoke-test",
+      "description": "Safe GET health probe only; skips all mutating tests."
+    },
+    {
+      "id": "12",
+      "name": "SmartNet Agent 12 - Release Preflight",
+      "file": "workflows/12-release-preflight.json",
+      "webhook_path": "/webhook/smartnet/agents/12-release-preflight",
+      "description": "Checks release evidence; never deploys."
+    }
+  ]
+}
