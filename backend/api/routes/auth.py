@@ -395,14 +395,13 @@ async def confirm_payment(
     reg_id: int,
     days: int = 30,
     payment_ref: Optional[str] = None,
-    secret: Optional[str] = Query(None),
     x_webhook_secret: Optional[str] = Header(None, alias="X-Webhook-Secret"),
     db: AsyncSession = Depends(database.get_db),
 ):
     """Secure payment confirmation webhook.
     Requires PAYMENT_WEBHOOK_SECRET to prevent unauthorized free account activation.
     """
-    provided_secret = secret or x_webhook_secret
+    provided_secret = x_webhook_secret
     if not provided_secret or provided_secret != settings.PAYMENT_WEBHOOK_SECRET:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -412,6 +411,10 @@ async def confirm_payment(
     if days < 1 or days > 3650:
         raise HTTPException(status_code=400, detail="عدد الأيام يجب أن يكون بين 1 و 3650")
 
+    verified_reference = (payment_ref or "").strip()
+    if not verified_reference:
+        raise HTTPException(status_code=400, detail="مرجع المعاملة مطلوب لتأكيد الدفع")
+
     result = await db.execute(select(models.RegistrationRequest).where(models.RegistrationRequest.id == reg_id))
     reg = result.scalars().first()
     if not reg:
@@ -419,10 +422,34 @@ async def confirm_payment(
     if reg.processed:
         return {"ok": False, "detail": "تمت معالجته مسبقاً"}
 
+    # Provider retries are idempotent only for the same registration/reference.
+    if reg.paid:
+        if reg.payment_ref == verified_reference:
+            return {
+                "ok": True,
+                "paid": True,
+                "processed": False,
+                "idempotent": True,
+                "message": "سبق تأكيد هذه المعاملة، والطلب ما زال بانتظار موافقة الإدارة."
+            }
+        raise HTTPException(status_code=409, detail="تم تأكيد دفع هذا الطلب بمرجع مختلف")
+
+    duplicate_result = await db.execute(
+        select(models.RegistrationRequest).where(
+            models.RegistrationRequest.payment_ref == verified_reference,
+            models.RegistrationRequest.id != reg_id,
+        ).limit(1)
+    )
+    if duplicate_result.scalars().first():
+        raise HTTPException(status_code=409, detail="مرجع المعاملة مرتبط بطلب اشتراك آخر")
+
     reg.paid = True
-    if payment_ref:
-        reg.payment_ref = payment_ref
-    db.add(models.AuditLog(action="webhook_payment_confirmed", performed_by="payment_gateway", details=f"Payment confirmed for registration #{reg_id}, awaiting admin approval, ref={payment_ref}"))
+    reg.payment_ref = verified_reference
+    db.add(models.AuditLog(
+        action="webhook_payment_confirmed",
+        performed_by="payment_gateway",
+        details=f"Payment confirmed for registration #{reg_id}; awaiting admin approval; ref={verified_reference}",
+    ))
     await db.commit()
     return {
         "ok": True,
@@ -501,18 +528,15 @@ async def upload_registration_receipt(
     ))
     await db.commit()
 
-    # Trigger automatic smart authentication bot to verify receipt and activate account
-    bot_active = await is_bot_enabled(db)
-    if bot_active:
-        await process_pending_registrations(db, force_now=True)
-        await db.refresh(reg)
-
     return {
         "ok": True,
         "receipt_url": rel_url,
         "processed": reg.processed,
         "paid": reg.paid,
-        "message": "تم استلام سند التحويل بنجاح وفحصه واعتماد اشتراكك بواسطة بوت المصادقة الذكي! يمكنك تسجيل الدخول الآن مباشرة." if reg.processed else "تم رفع صورة الحوالة بنجاح، بانتظار استكمال التدقيق والمصادقة."
+        "message": (
+            "تم استلام صورة الإيصال. ستظل حالة الاشتراك قيد المراجعة حتى تتحقق الإدارة من وصول المبلغ؛ "
+            "لن يتم التفعيل اعتماداً على الصورة وحدها."
+        ),
     }
 
 
@@ -631,7 +655,7 @@ async def get_bot_status(
         "name": "بوت المصادقة الذكي SmartNet",
         "last_run": datetime.now(timezone.utc).isoformat(),
         "total_auto_approved": total_approved,
-        "mode": "فحص وتفعيل فوري للطلبات المسددة" if enabled else "إيقاف مؤقت",
+        "mode": "فحص الطلبات وإشعار أصحابها؛ التفعيل بعد موافقة إدارية مستقلة" if enabled else "إيقاف مؤقت",
     }
 
 
@@ -657,11 +681,12 @@ async def trigger_bot(
     db: AsyncSession = Depends(database.get_db),
     current_admin = Depends(get_current_admin)
 ):
-    """Trigger the authentication bot immediately on all pending paid requests."""
-    approved_count = await process_pending_registrations(db, force_now=True)
+    """Trigger a safe notification/review cycle; this endpoint never activates accounts."""
+    notifications_sent = await process_pending_registrations(db, force_now=True)
     return {
         "ok": True,
-        "approved_count": approved_count,
-        "message": f"قام بوت المصادقة بفحص الطلبات والمصادقة على {approved_count} طلب مسدد بنجاح!"
+        "approved_count": 0,
+        "notifications_sent": notifications_sent,
+        "message": f"تم فحص الطلبات وإرسال {notifications_sent} إشعاراً؛ لم يتم تفعيل أي اشتراك تلقائياً."
     }
 

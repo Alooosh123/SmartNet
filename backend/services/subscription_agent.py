@@ -89,7 +89,7 @@ async def set_bot_enabled(db, enabled: bool) -> bool:
 
 
 async def process_pending_registrations(db, force_now: bool = False) -> int:
-    """Verify and authenticate pending registrations automatically based on selected plan."""
+    """Notify pending applicants; payment and activation require separate verification and admin approval."""
     bot_active = await is_bot_enabled(db)
     if not bot_active and not force_now:
         return 0
@@ -101,7 +101,7 @@ async def process_pending_registrations(db, force_now: bool = False) -> int:
     )
     registrations = result.scalars().all()
     now = datetime.now(timezone.utc)
-    approved_count = 0
+    notices_sent = 0
     changed = False
 
     for registration in registrations:
@@ -117,67 +117,36 @@ async def process_pending_registrations(db, force_now: bool = False) -> int:
         plan_info = PLANS.get(plan_key, PLANS["monthly"])
 
         has_receipt = bool(getattr(registration, "receipt_image", None))
-        if registration.paid or has_receipt:
-            is_via_receipt = not registration.paid and has_receipt
-            if is_via_receipt:
-                registration.paid = True
-                registration.payment_ref = f"receipt-{registration.id}"
 
-            existing = await db.execute(
-                select(models.Client).where(models.Client.username == registration.username)
+        # A confirmed payment remains pending until an administrator approves activation.
+        # An uploaded receipt image is evidence for review, not proof of settlement.
+        if registration.paid:
+            continue
+
+        if has_receipt:
+            receipt_marker = f"registration #{registration.id}"
+            receipt_notice_result = await db.execute(
+                select(models.AuditLog).where(
+                    models.AuditLog.action == "bot_receipt_pending_review",
+                    models.AuditLog.details.contains(receipt_marker),
+                ).limit(1)
             )
-            client = existing.scalars().first()
-            if not client:
-                client = models.Client(
+            if not receipt_notice_result.scalars().first():
+                db.add(models.ChatMessage(
                     username=registration.username,
-                    hashed_password=registration.hashed_password,
-                    plan=plan_key,
-                    can_reboot_network=plan_info["can_reboot_network"],
-                    is_active=True,
-                    subscription_expires=now + timedelta(days=plan_info["days"]),
-                )
-                db.add(client)
-            else:
-                client.plan = plan_key
-                client.can_reboot_network = plan_info["can_reboot_network"]
-                client.is_active = True
-                client.subscription_expires = now + timedelta(days=plan_info["days"])
-
-            registration.processed = True
-            approved_count += 1
-
-            # Welcome message in Chat
-            approval_method = "بفحص صورة الحوالة وتأكيد السداد وتفعيل اشتراكك بنجاح" if is_via_receipt else "بتفعيل اشتراكك بنجاح"
-            reboot_status = "مفعلة ✅ (تحكم كامل بالشبكة)" if plan_info['can_reboot_network'] else "غير مفعلة (متاحة في الباقة السنوية)"
-            cards_status = "مفعلة بالكامل (كافة الفئات وطباعة غير محدودة) 💎" if plan_key == "annual" else ("متاحة حتى 100 كرت ⚡" if plan_key == "semi_annual" else "غير مفعلة")
-
-            limit_desc = 'غير محدودة ♾️' if plan_info.get('daily_chat_limit') is None else f"{plan_info['daily_chat_limit']} رسالة يومياً"
-            db.add(models.ChatMessage(
-                username=registration.username,
-                sender="bot",
-                message=(
-                    f"🎉 أهلاً بك {registration.username}! قام بوت المصادقة الذكي {approval_method} "
-                    f"ضمن باقة ({plan_info['name']} - ${plan_info['price']}) بصلاحية {plan_info['days']} يوماً.\n\n"
-                    f"• صلاحية إدارة وطباعة الكروت: {cards_status}\n"
-                    f"• صلاحية إعادة تشغيل الراوتر: {reboot_status}\n"
-                    f"• حصة الرسائل الذكية: {limit_desc}.\n\n"
-                    f"نتمنى لك تجربة ممتعة وسلسة مع SmartNet!"
-                ),
-            ))
-
-            audit_action = "bot_receipt_approved" if is_via_receipt else "bot_auth_approved"
-            audit_details = (
-                f"Smart Auth Bot verified remittance voucher and approved registration #{registration.id} ({registration.username}) for plan {plan_info['name']}"
-                if is_via_receipt else
-                f"Smart Auth Bot approved paid registration #{registration.id} ({registration.username}) for plan {plan_info['name']} (${plan_info['price']}, {plan_info['days']} days)"
-            )
-
-            db.add(models.AuditLog(
-                action=audit_action,
-                performed_by="auth_bot",
-                details=audit_details,
-            ))
-            changed = True
+                    sender="bot",
+                    message=(
+                        "تم استلام صورة الإيصال بنجاح. لا تُعد الصورة وحدها تأكيداً لوصول المبلغ، "
+                        "وسيظل الاشتراك غير مفعل حتى مراجعة الإدارة والتحقق من المعاملة."
+                    ),
+                ))
+                db.add(models.AuditLog(
+                    action="bot_receipt_pending_review",
+                    performed_by="subscription_agent",
+                    details=f"Receipt uploaded for registration #{registration.id}; awaiting independent payment verification",
+                ))
+                notices_sent += 1
+                changed = True
             continue
 
         # For unpaid after grace period: send notice once
@@ -204,12 +173,13 @@ async def process_pending_registrations(db, force_now: bool = False) -> int:
             performed_by="auth_bot",
             details=f"Sent unpaid notice for registration #{registration.id} ({registration.username})",
         ))
+        notices_sent += 1
         changed = True
 
     if changed:
         await db.commit()
 
-    return approved_count
+    return notices_sent
 
 
 async def subscription_agent_loop(stop_event):
