@@ -88,38 +88,50 @@ class MikroTikClient:
     # ------------------------------------------------------------------ #
 
     async def get_status(self) -> Dict[str, Any]:
-        if self.demo_mode or not ROUTEROS_AVAILABLE:
+        if self.demo_mode:
             return await self._demo_status()
+        if not ROUTEROS_AVAILABLE:
+            raise RuntimeError("routeros_api is required when MIKROTIK_DEMO_MODE is disabled.")
         return await self._real_status()
 
     async def get_active_sessions(self) -> List[Dict[str, Any]]:
-        if self.demo_mode or not ROUTEROS_AVAILABLE:
+        if self.demo_mode:
             return await self._demo_sessions()
+        if not ROUTEROS_AVAILABLE:
+            raise RuntimeError("routeros_api is required when MIKROTIK_DEMO_MODE is disabled.")
         return await self._real_sessions()
 
     async def generate_hotspot_users(
         self, count: int, profile: str, duration_hours: int
     ) -> List[Dict[str, Any]]:
-        if self.demo_mode or not ROUTEROS_AVAILABLE:
+        if self.demo_mode:
             return await self._demo_generate(count, profile, duration_hours)
+        if not ROUTEROS_AVAILABLE:
+            raise RuntimeError("routeros_api is required when MIKROTIK_DEMO_MODE is disabled.")
         return await self._real_generate(count, profile, duration_hours)
 
     async def remove_hotspot_user(self, username: str) -> bool:
-        if self.demo_mode or not ROUTEROS_AVAILABLE:
+        if self.demo_mode:
             logger.info(f"[DEMO] Removed hotspot user: {username}")
             return True
+        if not ROUTEROS_AVAILABLE:
+            raise RuntimeError("routeros_api is required when MIKROTIK_DEMO_MODE is disabled.")
         return await self._real_remove(username)
 
     async def reboot_router(self) -> bool:
-        if self.demo_mode or not ROUTEROS_AVAILABLE:
+        if self.demo_mode:
             logger.info("[DEMO] Router reboot command sent.")
             await asyncio.sleep(1)
             return True
+        if not ROUTEROS_AVAILABLE:
+            raise RuntimeError("routeros_api is required when MIKROTIK_DEMO_MODE is disabled.")
         return await self._real_reboot()
 
     async def get_interfaces(self) -> List[Dict[str, Any]]:
-        if self.demo_mode or not ROUTEROS_AVAILABLE:
+        if self.demo_mode:
             return list(DEMO_INTERFACES)
+        if not ROUTEROS_AVAILABLE:
+            raise RuntimeError("routeros_api is required when MIKROTIK_DEMO_MODE is disabled.")
         return await self._real_interfaces()
 
     # ------------------------------------------------------------------ #
@@ -188,7 +200,7 @@ class MikroTikClient:
                 lambda: list(api.get_resource("/system/resource").get())
             )
             if not resources:
-                return await self._demo_status()
+                raise RuntimeError("RouterOS returned no system resource information.")
             r = resources[0]
             active_users = await asyncio.to_thread(
                 lambda: list(api.get_resource("/ip/hotspot/active").get())
@@ -210,8 +222,8 @@ class MikroTikClient:
                 "connected": True,
             }
         except Exception as exc:
-            logger.error(f"MikroTik real status failed: {exc} — falling back to demo")
-            return await self._demo_status()
+            logger.exception("MikroTik real status failed; refusing to return demo telemetry.")
+            raise RuntimeError(f"Real MikroTik status unavailable: {exc}") from exc
 
     async def _real_sessions(self) -> List[Dict[str, Any]]:
         try:
@@ -233,8 +245,8 @@ class MikroTikClient:
                 })
             return result
         except Exception as exc:
-            logger.error(f"MikroTik real sessions failed: {exc} — falling back to demo")
-            return await self._demo_sessions()
+            logger.exception("MikroTik real sessions failed; refusing to return demo telemetry.")
+            raise RuntimeError(f"Real MikroTik sessions unavailable: {exc}") from exc
 
     async def _real_generate(
         self, count: int, profile: str, duration_hours: int
@@ -260,8 +272,8 @@ class MikroTikClient:
                 })
             return users
         except Exception as exc:
-            logger.error(f"MikroTik real generate failed: {exc} — falling back to demo")
-            return await self._demo_generate(count, profile, duration_hours)
+            logger.exception("Real MikroTik user generation failed; no demo cards will be returned.")
+            raise RuntimeError(f"Real MikroTik user generation failed: {exc}") from exc
 
     async def _real_remove(self, username: str) -> bool:
         try:
@@ -309,8 +321,8 @@ class MikroTikClient:
                 })
             return result
         except Exception as exc:
-            logger.error(f"MikroTik real interfaces failed: {exc} — falling back to demo")
-            return list(DEMO_INTERFACES)
+            logger.exception("MikroTik real interface query failed; refusing to return demo telemetry.")
+            raise RuntimeError(f"Real MikroTik interfaces unavailable: {exc}") from exc
 
     # ------------------------------------------------------------------ #
     #  Helpers
