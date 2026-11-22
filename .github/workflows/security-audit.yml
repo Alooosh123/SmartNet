@@ -38,7 +38,7 @@ jobs:
         run: bandit -r backend -lll -x backend/tests -f json -o bandit-report.json
       - name: Upload security reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: smartnet-security-reports
           path: |
