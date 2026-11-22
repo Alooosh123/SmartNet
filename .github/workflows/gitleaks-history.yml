@@ -36,9 +36,7 @@ jobs:
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
           sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
           gitleaks version
-      - name: Inventory all reachable Git history (review report)
-        id: full_history
-        continue-on-error: true
+      - name: Enforce full-history secret scan
         run: |
           gitleaks git --redact --log-opts="--all" --report-format=json --report-path=gitleaks-full-history.json .
       - name: Upload full-history report
