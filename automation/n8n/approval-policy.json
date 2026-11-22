@@ -1,0 +1,39 @@
+{
+  "default": "deny",
+  "principles": [
+    "Least privilege",
+    "Read only by default",
+    "No secrets in Git or workflow JSON",
+    "No direct agent access to production database or RouterOS",
+    "No demo fallback presented as real telemetry",
+    "Privileged actions require backend authorization and durable audit"
+  ],
+  "human_approval_required": [
+    "router_reboot",
+    "disconnect_user",
+    "firewall_change",
+    "hotspot_user_create",
+    "payment_approval",
+    "subscription_activation",
+    "database_restore",
+    "production_deploy"
+  ],
+  "payment_rules": [
+    "A receipt image is not proof of settlement",
+    "Verify provider signature or query trusted provider",
+    "Check unique reference, amount, currency and recipient",
+    "Manual payments require finance approval"
+  ],
+  "network_rules": [
+    "Dedicated least-privilege monitoring account",
+    "Trusted source IP and TLS/private tunnel",
+    "Isolated RouterOS test device before production",
+    "No agent-triggered production reboot or disconnect"
+  ],
+  "n8n_rules": [
+    "Import workflows inactive",
+    "Configure webhook authentication before activation",
+    "Do not expose editor/webhooks publicly without TLS and authentication",
+    "Store tokens in n8n credentials"
+  ]
+}
