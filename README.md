@@ -1,241 +1,115 @@
 <div dir="rtl">
 
-# 🌐 SmartNet — نظام إدارة شبكة الهوت سبوت
+# SmartNet — نظام إدارة شبكة Hotspot
 
-<div align="center">
+SmartNet نظام عربي لإدارة اشتراكات Hotspot على MikroTik، إصدار الكروت وملفات PDF، مراجعة الدفعات، وإدارة الشبكة بمساعدة وكلاء ذكاء اصطناعي للقراءة فقط.
 
-![SmartNet](https://img.shields.io/badge/SmartNet-v1.0.0-00d4aa?style=for-the-badge)
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi)
-![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)
-![MikroTik](https://img.shields.io/badge/MikroTik-RouterOS-003366?style=for-the-badge)
+## المكونات
+- Backend: Python 3.11+ وFastAPI وSQLAlchemy async.
+- Frontend: React وVite، واجهة عربية RTL.
+- Database: SQLite للتطوير المحلي فقط، وMariaDB 11.8 LTS للإنتاج.
+- Router integration: MikroTik RouterOS API-SSL عبر شبكة إدارة خاصة أو VPN، مع تحقق إلزامي من شهادة TLS واسم المضيف (المنفذ الافتراضي 8729).
+- Edge / HTTPS: Caddy، دون Docker أو Docker Compose.
+- Operations: خدمات Windows/Linux، Alembic، نسخ احتياطي واستعادة.
+- AI: مساعد دعم العميل، وكيل مراقبة شبكة للقراءة فقط، ووكيل تشخيص يعتمد قاعدة معرفة MikroTik.
 
-نظام متكامل لإدارة شبكات الهوت سبوت MikroTik مع بوت تيليجرام ولوحة تحكم عصرية
+## التشغيل المحلي على Windows
 
-</div>
+1. ثبّت Python 3.11 أو أحدث وNode.js 22.12 أو أحدث.
+2. انسخ .env.example إلى backend/.env، واترك ENVIRONMENT=development وSQLite وDemo MikroTik للتطوير فقط.
+3. افتح PowerShell:
 
----
-
-## 📋 نظرة عامة
-
-**SmartNet** منصة احترافية لإدارة شبكات الإنترنت اللاسلكي (Hotspot) تتضمن:
-
-- 🤖 **بوت تيليجرام** — توليد كروت الهوت سبوت، متابعة حالة الشبكة، إدارة المستخدمين
-- ⚙️ **API خلفي (FastAPI)** — واجهة برمجية كاملة تغذّي لوحة التحكم
-- 🖥️ **لوحة تحكم (React)** — داشبورد احترافي بتصميم عصري بالعربية
-- 📄 **توليد PDF** — كروت هوت سبوت جاهزة للطباعة
-- 🔒 **نظام صلاحيات** — JWT للوحة التحكم + قائمة مديرين للبوت
-
----
-
-## 🏗️ هيكل المشروع
-
-```
-smartnet-project/
-├── backend/                    # الواجهة الخلفية (Python)
-│   ├── bot/                    # بوت تيليجرام
-│   │   ├── handlers/           # معالجات الأوامر
-│   │   ├── keyboards/          # الأزرار التفاعلية
-│   │   └── main_bot.py         # تشغيل البوت
-│   ├── api/                    # REST API
-│   │   ├── routes/             # مسارات الـ API
-│   │   └── controllers/        # المنطق البرمجي
-│   ├── services/               # الخدمات المشتركة
-│   │   ├── mikrotik_api.py     # التواصل مع الراوتر
-│   │   ├── pdf_generator.py    # توليد ملفات PDF
-│   │   └── auth_service.py     # التحقق والصلاحيات
-│   ├── config/
-│   │   └── settings.py         # إعدادات النظام
-│   ├── database/
-│   │   ├── models.py           # نماذج قاعدة البيانات
-│   │   └── db_core.py          # الاتصال بقاعدة البيانات
-│   ├── requirements.txt
-│   └── app.py                  # نقطة الانطلاق
-├── frontend/                   # لوحة التحكم (React + Vite)
-│   ├── src/
-│   │   ├── components/         # مكونات قابلة لإعادة الاستخدام
-│   │   ├── pages/              # صفحات لوحة التحكم
-│   │   ├── services/           # الاتصال بالـ API
-│   │   └── App.jsx
-│   └── package.json
-├── .env.example                # نموذج المتغيرات البيئية
-├── .gitignore
-└── README.md
-```
-
----
-
-## ⚡ المتطلبات
-
-| الأداة | الإصدار المطلوب |
-|--------|----------------|
-| Python | 3.11 أو أحدث |
-| Node.js | 18 أو أحدث |
-| npm | 9 أو أحدث |
-
----
-
-## 🚀 التشغيل السريع
-
-### 1. استنساخ المشروع
-
-```bash
-git clone https://github.com/your-username/smartnet.git
-cd smartnet
-```
-
-### 2. إعداد المتغيرات البيئية
-
-```bash
-cp .env.example .env
-# افتح .env وعدّل القيم المطلوبة
-```
-
-> **الحد الأدنى للتشغيل (وضع التجريب):**
-> - أضف توكن البوت في `TELEGRAM_BOT_TOKEN`
-> - أضف معرّف تيليجرام الخاص بك في `TELEGRAM_ADMIN_IDS`
-> - اتركه `MIKROTIK_DEMO_MODE=True` للبيانات الوهمية
-
-### 3. تشغيل الواجهة الخلفية
-
-```bash
+~~~powershell
 cd backend
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements-dev.txt
+uvicorn app:app --reload --host 127.0.0.1 --port 8000
+~~~
 
-# إنشاء بيئة افتراضية وتثبيت المكتبات
-python -m venv venv
-venv\Scripts\activate          # Windows
-# source venv/bin/activate     # Linux/Mac
+4. في نافذة أخرى:
 
-pip install -r requirements.txt
-
-# تشغيل الخادم
-python app.py
-```
-
-سيعمل الخادم على: `http://localhost:8000`
-- وثائق API: `http://localhost:8000/docs`
-
-### 4. تشغيل البوت
-
-```bash
-# في نافذة ترمينال جديدة (مع تفعيل البيئة الافتراضية)
-cd backend
-python -m bot.main_bot
-```
-
-### 5. تشغيل لوحة التحكم
-
-```bash
+~~~powershell
 cd frontend
+Copy-Item .env.example .env.local
 npm install
 npm run dev
-```
+~~~
 
-ستعمل لوحة التحكم على: `http://localhost:5173`
+5. افتح http://127.0.0.1:5173. أول مدير تطوير ينشأ من DASHBOARD_USERNAME وDASHBOARD_PASSWORD. غيّر كلمة المرور فوراً.
 
----
+## اختبارات الأمان والرحلة الكاملة
 
-## 🔑 بيانات الدخول الافتراضية
+~~~powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+pip-audit -r requirements.txt --strict
+python -m pytest -q tests
+cd ..\frontend
+npm audit --audit-level=moderate
+npm run build
+npm run test:e2e
+~~~
 
-| الحقل | القيمة |
-|-------|--------|
-| اسم المستخدم | `admin` |
-| كلمة المرور | `admin123` |
+اختبارات CI تشمل دورة التسجيل، التحقق اليدوي من التحويل، اعتماد الاشتراك، حدود الصلاحيات، توليد الكروت وPDF، وطلب عمليات الشبكة بموافقة الإدارة. بيئة الاختبار تستخدم MikroTik تجريبياً؛ لا تعتبر ذلك اختبار قبول للراوتر الحقيقي.
 
-> ⚠️ **مهم:** غيّر كلمة المرور فور الدخول في بيئة الإنتاج!
+## الإنتاج: MariaDB + Caddy + خدمات النظام
 
-## 💳 دورة اشتراك المشتركين
+لم يعد PostgreSQL أو Docker جزءاً من مسار النشر المعتمد. اتبع deploy/README.md لإعداد:
+- MariaDB 11.8 LTS بترميز utf8mb4.
+- حساب تشغيل محدود الصلاحيات، وحساب منفصل للترحيلات.
+- alembic upgrade head قبل تشغيل Backend.
+- بناء React static assets.
+- Caddy لإدارة HTTPS والـReverse Proxy.
+- خدمة systemd على Linux أو WinSW على Windows.
+- نسخ احتياطي لقاعدة البيانات ومجلد backend/uploads واختبار الاستعادة.
 
-يسجل العميل من رابط **إنشاء حساب مدفوع**، ثم يحصل على رابط الدفع من مزود الدفع عند ضبط المتغير:
+**مهم:** إذا كانت لديك قاعدة PostgreSQL قديمة تحتوي بيانات حقيقية، فلا تغيّر DATABASE_URL مباشرة. يجب تصدير البيانات وتحويلها والتحقق من العلاقات والملفات في نسخة MariaDB تجريبية أولاً. دليل النشر يوضح أن هذا الانتقال ليس تلقائياً.
 
-```env
-PAYMENT_CHECKOUT_URL=https://your-provider.example/checkout/{invoice_id}
-PAYMENT_WEBHOOK_SECRET=ضع-سر-webhook-قوي-هنا
-```
+## قبول اتصال MikroTik الحقيقي (قراءة فقط أولاً)\nبعد إعداد شهادة API-SSL على RouterOS بحيث يطابق SAN اسم المضيف في MIKROTIK_HOST، وإعداد حساب المراقبة المنفصل، شغّل من مجلد backend:\n\n~~~powershell\npython scripts/mikrotik_readonly_acceptance.py\n~~~\n\nيستخدم الفحص API-SSL ويتحقق من سلسلة الشهادة واسم المضيف، ويعرض بيانات مجمعة وعدد الجلسات فقط دون أسماء أو عناوين المشتركين، ولا ينفذ أي تعديل. عند استخدام CA خاص، عيّن MIKROTIK_TLS_CA_FILE إلى ملف PEM موثوق. لا تستخدم API غير المشفر على المنفذ 8728 في الإنتاج.\n\n## الدفع اليدوي التشغيلي
 
-بعد نجاح الدفع يستدعي مزود الدفع المسار التالي مع رأس `X-Webhook-Secret`:
+الوضع المعتمد ما لم يتم توصيل مزود موثق هو PAYMENT_PROVIDER_MODE=manual:
+1. ينشئ العميل طلب الاشتراك ويرفع الإيصال الاختياري.
+2. يراجع الموظف حركة المحفظة/الحساب خارج SmartNet.
+3. يدخل مرجع العملية والمبلغ والعملة وملاحظة المراجعة.
+4. يتحقق النظام من تطابق المبلغ والعملة ومن عدم تكرار المرجع.
+5. يعتمد المدير الاشتراك بصورة منفصلة.
+6. يمكن مطابقة كشف CSV موحد بالحقول reference,amount,currency,status من المسار /auth/reconciliation/statement. المطابقة لا تغير حالة المدفوعات ولا تفعّل الحسابات تلقائياً.
 
-```text
-POST /auth/registrations/{registration_id}/confirm?payment_ref=TRANSACTION_ID
-```
+لا يوجد ربط فعلي بمزود دفع محدد قبل تزويد المشروع بوثائق API الرسمية وبياناته.
 
-تأكيد الدفع لا ينشئ حسابًا فعالًا تلقائيًا. يظهر الطلب للمدير بحالة **مدفوع بانتظار الموافقة**، وبعد الموافقة فقط يتم إنشاء `Client` كمشترك يستطيع تسجيل الدخول.
+## Wallet Monitoring Agent — تنفيذ أولي
 
----
+أضيفت طبقة Backend أولية لاستقبال أحداث هاتف Android مخصص:
+- تسجيل مزودي المحافظ وأسماء حزم Android المسموح بها، وربط حساب الاستقبال بهاتف محدد.
+- تسجيل رقم محفظة صاحب الشبكة واعتماده إدارياً أول مرة.
+- إنشاء Payment Intent ثابت المبلغ والعملة، واستقبال heartbeat والإشعارات من جهاز مسجل.
+- منع تكرار الحدث وحفظ بصمة محتواه فقط، دون تخزين نص الإشعار الخام أو رقم المحفظة مكشوفاً.
 
-## 📱 أوامر البوت
+**حدود التنفيذ حالياً:** أضيف مصدر تطبيق Android مع دعم API 24–37، وسجل المحافظ السبع ومحلل إيصال عربي مشترك. ما زال بناء APK واختباره على هاتف فعلي مطلوبين، كما أن قوالب الإشعارات الحقيقية وأسماء الحزم لم تؤكد بعد لكل محفظة. لا يوجد تفعيل آلي؛ يبقى التحقق اليدوي داخل المحفظة مسار الإنتاج. راجع [دليل التطبيق](android/wallet-collector/README.md) و[وثيقة الوكيل](docs/WALLET_MONITORING_AGENT.md).
 
-| الأمر | الوصف |
-|-------|-------|
-| `/start` | بدء التشغيل وعرض القائمة الرئيسية |
-| `/generate` | توليد كروت هوت سبوت جديدة |
-| `/cards` | عرض آخر الدفعات المولّدة |
-| `/status` | حالة الراوتر والشبكة |
-| `/users` | المستخدمون النشطون |
-| `/stats` | إحصائيات عامة |
-| `/help` | قائمة الأوامر |
+## وكلاء الذكاء الاصطناعي
+- Network Observer: يجمع CPU والذاكرة وإصدار RouterOS وعدد الجلسات فقط. لا يملك أوامر كتابة.
+- Network Diagnostic Agent: يربط آخر قراءة بقاعدة معرفة موثقة، ويقدم تشخيصاً واحتمالات ومراجع، ولا ينفذ تغييرات.
+- Customer Assistant: دعم واستفسارات اشتراك، ولا يثبت الدفع أو يدعي تنفيذ إجراءات.
+- التغييرات على الراوتر تمر عبر طلب موافقة مدير، مع سجل منشئ ومراجع ونتيجة تنفيذ.
 
----
+## بوابات التشغيل الفعلي
+- [ ] pip-audit وnpm audit بلا ثغرات متوسطة/عالية غير معالجة.
+- [ ] MariaDB migrations وbackup/restore تم اختبارها على نسخة مخصصة.
+- [ ] DNS وHTTPS وCaddy وخدمة Backend يعملان بعد إعادة تشغيل الخادم.
+- [ ] RouterOS API متاح عبر VPN/شبكة الإدارة بحساب محدود؛ لا تفتح منفذ API للإنترنت.
+- [ ] نجاح قراءة الحالة والجلسات وإنشاء كرت وفصله على راوتر اختبار حقيقي.
+- [ ] الدفع اليدوي أو مزود الدفع اجتاز مطابقة عملية حقيقية تجريبية.
+- [ ] النسخ الاحتياطي لقاعدة البيانات وملفات uploads تمت استعادتهما فعلياً.
+- [ ] سجلات المراقبة والتنبيهات ومؤشرات الوكلاء تعمل.
 
-## 🌐 مسارات API الرئيسية
-
-| المسار | الطريقة | الوصف |
-|--------|---------|-------|
-| `/api/health` | GET | فحص حالة الخادم |
-| `/api/auth/login` | POST | تسجيل الدخول |
-| `/api/stats/overview` | GET | الإحصائيات العامة |
-| `/api/cards` | GET | قائمة الدفعات |
-| `/api/cards/generate` | POST | توليد كروت جديدة |
-| `/api/cards/{id}/pdf` | GET | تنزيل PDF |
-| `/api/network/status` | GET | حالة الراوتر |
-| `/api/network/users` | GET | المستخدمون النشطون |
-
----
-
-## 🔧 الإعداد لبيئة الإنتاج
-
-### الانتقال لراوتر MikroTik حقيقي
-
-```env
-MIKROTIK_DEMO_MODE=False
-MIKROTIK_HOST=192.168.88.1
-MIKROTIK_USERNAME=admin
-MIKROTIK_PASSWORD=your-router-password
-```
-
-> تأكد من تفعيل **RouterOS API** في الراوتر:
-> `IP → Services → API (port 8728)` → Enable
-
-### تغيير قاعدة البيانات إلى PostgreSQL
-
-```env
-DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/smartnet
-```
-
-```bash
-pip install asyncpg
-```
-
----
-
-## 🛡️ الأمان
-
-- ✅ JWT tokens للمصادقة
-- ✅ قائمة مديرين مقيّدة في البوت
-- ✅ تشفير كلمات المرور (bcrypt)
-- ✅ CORS محدود في الإنتاج
-- ✅ لا ترفع `.env` على GitHub أبداً!
-
----
-
-## 📄 الترخيص
-
-MIT License — للاستخدام الحر مع الإشارة للمصدر.
-
----
-
-<div align="center">
-صُنع بـ ❤️ | SmartNet v1.0.0
-</div>
+راجع SECURITY.md وdocs/PRODUCTION_RUNBOOK.md وdeploy/README.md.
 
 </div>
+
+
+## تطبيق الهاتف المخصص
+
+أضيف مشروع Android أولي في `android/wallet-collector` لالتقاط إشعارات حزم المحافظ المسموح بها فقط، وتخزينها محلياً بتشفير Android Keystore وإرسالها عبر HTTPS عند توفر الاتصال. التطبيق لا يملك أي صلاحية لاعتماد الدفع أو تفعيل الاشتراك. راجع [دليل تطبيق Wallet Collector](android/wallet-collector/README.md). يتطلب قبل التشغيل تسجيل الهاتف والمزود وحساب الاستقبال في SmartNet وتفعيل `WALLET_MONITORING_ENABLED` بعد تجهيز إعدادات الإنتاج.

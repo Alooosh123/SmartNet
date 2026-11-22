@@ -1,51 +1,169 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import List, Optional
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional, List
+from sqlalchemy.engine import make_url
+
 
 class Settings(BaseSettings):
-    # API Security
-    SECRET_KEY: str = "smartnet-super-secret-key-change-in-production-2024"
+    """Environment-driven SmartNet configuration.
+
+    Development defaults are intentionally local-only. Production startup fails
+    closed until strong secrets and real integrations are explicitly configured.
+    """
+
+    ENVIRONMENT: str = "development"
+    LOG_LEVEL: str = "INFO"
+
+    SECRET_KEY: str = "dev-only-change-me-before-production"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440 # 1 day
-    PAYMENT_WEBHOOK_SECRET: str = "smartnet-webhook-secret-key"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    PAYMENT_WEBHOOK_SECRET: str = "dev-only-change-me-before-production"
+    PAYMENT_PROVIDER_MODE: str = "manual"  # "manual" or "gateway"
     PAYMENT_CHECKOUT_URL: Optional[str] = None
     PAYMENT_DEMO_MODE: bool = True
     APP_PUBLIC_URL: str = "http://127.0.0.1:5173"
-    SUBSCRIPTION_AGENT_DELAY_SECONDS: int = 60
-    SUBSCRIPTION_AGENT_INTERVAL_SECONDS: int = 10
-    AUTO_APPROVAL_DAYS: int = 30
 
-    # Default Dashboard Credentials
+    # Dedicated Android notification collector. Automatic activation is deliberately
+    # unavailable until a provider-specific, tested settlement parser is shipped.
+    WALLET_MONITORING_ENABLED: bool = False
+    WALLET_AUTO_ACTIVATION_ENABLED: bool = False
+    WALLET_IDENTITY_HMAC_SECRET: Optional[str] = None
+    WALLET_DEVICE_CLOCK_SKEW_SECONDS: int = 300
+
     DASHBOARD_USERNAME: str = "admin"
-    DASHBOARD_PASSWORD: str = "admin123"
+    DASHBOARD_PASSWORD: str = "dev-only-SmartNet-Admin-Change-This-2026!"
 
-    # MikroTik
     MIKROTIK_HOST: str = "192.168.88.1"
     MIKROTIK_USERNAME: str = "admin"
     MIKROTIK_PASSWORD: str = ""
-    MIKROTIK_PORT: int = 8728
+    MIKROTIK_PORT: int = 8729
+    MIKROTIK_READONLY_HOST: Optional[str] = None
+    MIKROTIK_READONLY_USERNAME: Optional[str] = None
+    MIKROTIK_READONLY_PASSWORD: Optional[str] = None
+    MIKROTIK_READONLY_PORT: int = 8729
+    MIKROTIK_TLS_CA_FILE: Optional[str] = None
     MIKROTIK_DEMO_MODE: bool = True
     SSID: str = "SmartNet-WiFi"
 
-    # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./smartnet.db"
+    MIGRATION_DATABASE_URL: Optional[str] = None
+    NETWORK_OBSERVER_ENABLED: bool = True
+    NETWORK_OBSERVER_INTERVAL_SECONDS: int = 60
+    NETWORK_OBSERVER_HISTORY_LIMIT: int = 500
+    NETWORK_ALERT_CPU_THRESHOLD: int = 85
+    NETWORK_ALERT_FREE_MEMORY_MB: int = 32
 
-    # AI & Integrations
     OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    TELEGRAM_BOT_TOKEN: Optional[str] = None
+    TELEGRAM_ADMIN_IDS: List[int] = Field(default_factory=list)
+    BOT_API_BASE_URL: str = "http://127.0.0.1:8000"
 
-    # CORS
-    CORS_ORIGINS: List[str] = [
+    SUBSCRIPTION_AGENT_DELAY_SECONDS: int = 60
+    SUBSCRIPTION_AGENT_INTERVAL_SECONDS: int = 30
+
+    CORS_ORIGINS: List[str] = Field(default_factory=lambda: [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
         "http://localhost:4173",
         "http://127.0.0.1:4173",
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-    ]
+    ])
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=True,
+    )
+
+    @model_validator(mode="after")
+    def validate_production_configuration(self) -> "Settings":
+        if self.WALLET_AUTO_ACTIVATION_ENABLED:
+            raise ValueError(
+                "WALLET_AUTO_ACTIVATION_ENABLED is fail-closed until a provider-specific "
+                "notification parser and live acceptance suite are implemented."
+            )
+        if self.WALLET_DEVICE_CLOCK_SKEW_SECONDS < 30 or self.WALLET_DEVICE_CLOCK_SKEW_SECONDS > 1800:
+            raise ValueError("WALLET_DEVICE_CLOCK_SKEW_SECONDS must be between 30 and 1800.")
+
+        if self.ENVIRONMENT.lower() == "production":
+            insecure = {
+                "SECRET_KEY": self.SECRET_KEY,
+                "PAYMENT_WEBHOOK_SECRET": self.PAYMENT_WEBHOOK_SECRET,
+                "DASHBOARD_PASSWORD": self.DASHBOARD_PASSWORD,
+            }
+            weak = [
+                key for key, value in insecure.items()
+                if not value or value.startswith("dev-only-") or value in {"admin123", "password", "changeme"}
+            ]
+            if weak:
+                raise ValueError("Production configuration contains missing/default secrets: " + ", ".join(weak))
+            if len(self.SECRET_KEY) < 32 or len(self.PAYMENT_WEBHOOK_SECRET) < 32:
+                raise ValueError("Production secrets must each contain at least 32 characters.")
+            if self.PAYMENT_DEMO_MODE:
+                raise ValueError("PAYMENT_DEMO_MODE must be false in production.")
+            if self.MIKROTIK_DEMO_MODE:
+                raise ValueError("MIKROTIK_DEMO_MODE must be false in production.")
+            if not 1 <= self.MIKROTIK_PORT <= 65535 or not 1 <= self.MIKROTIK_READONLY_PORT <= 65535:
+                raise ValueError("RouterOS API-SSL ports must be between 1 and 65535.")
+            if self.MIKROTIK_TLS_CA_FILE and not Path(self.MIKROTIK_TLS_CA_FILE).expanduser().is_file():
+                raise ValueError("MIKROTIK_TLS_CA_FILE must reference an existing CA certificate file.")
+            if not self.MIKROTIK_PASSWORD:
+                raise ValueError("MIKROTIK_PASSWORD is required in production.")
+            if self.MIKROTIK_USERNAME.strip().lower() in {"admin", "administrator"}:
+                raise ValueError("Set a dedicated non-default MIKROTIK_USERNAME for operational commands.")
+            if self.NETWORK_OBSERVER_ENABLED:
+                if not self.MIKROTIK_READONLY_USERNAME or not self.MIKROTIK_READONLY_PASSWORD:
+                    raise ValueError("Read-only RouterOS API credentials are required when the Network Observer is enabled.")
+                if self.MIKROTIK_READONLY_USERNAME == self.MIKROTIK_USERNAME:
+                    raise ValueError("Use a separate read-only MikroTik account for network monitoring.")
+                if self.MIKROTIK_READONLY_PASSWORD == self.MIKROTIK_PASSWORD:
+                    raise ValueError("Use a different password for the read-only MikroTik account.")
+                if not 1 <= self.MIKROTIK_READONLY_PORT <= 65535:
+                    raise ValueError("MIKROTIK_READONLY_PORT must be a valid TCP port.")
+            if not self.DATABASE_URL.startswith("mysql+asyncmy://"):
+                raise ValueError("Production must use MariaDB via mysql+asyncmy://.")
+            database_url = make_url(self.DATABASE_URL)
+            if not database_url.username or not database_url.password or not database_url.host or not database_url.database:
+                raise ValueError("DATABASE_URL must include a MariaDB username, password, host and database.")
+            if not self.MIGRATION_DATABASE_URL:
+                raise ValueError("MIGRATION_DATABASE_URL is required for a separate production schema-migration account.")
+            if not self.MIGRATION_DATABASE_URL.startswith("mysql+asyncmy://"):
+                raise ValueError("MIGRATION_DATABASE_URL must use mysql+asyncmy://.")
+            migration_url = make_url(self.MIGRATION_DATABASE_URL)
+            if not migration_url.username or not migration_url.password or not migration_url.host or not migration_url.database:
+                raise ValueError("MIGRATION_DATABASE_URL must include a MariaDB username, password, host and database.")
+            if migration_url.username == database_url.username:
+                raise ValueError("Use a distinct MariaDB account for schema migrations.")
+            if self.PAYMENT_PROVIDER_MODE != "manual":
+                raise ValueError(
+                    "Only PAYMENT_PROVIDER_MODE=manual is permitted until a provider-specific "
+                    "signature, event-id, settlement, amount and currency adapter is implemented."
+                )
+            if len(self.DASHBOARD_PASSWORD) < 12:
+                raise ValueError("DASHBOARD_PASSWORD must contain at least 12 characters in production.")
+            if self.DASHBOARD_USERNAME.strip().lower() in {"admin", "administrator"}:
+                raise ValueError("Set a unique non-default DASHBOARD_USERNAME in production.")
+            if not self.CORS_ORIGINS:
+                raise ValueError("At least one exact HTTPS CORS origin is required in production.")
+            if any(not origin.startswith("https://") for origin in self.CORS_ORIGINS):
+                raise ValueError("Production CORS_ORIGINS must contain only HTTPS origins.")
+            if self.WALLET_MONITORING_ENABLED:
+                if not self.WALLET_IDENTITY_HMAC_SECRET or len(self.WALLET_IDENTITY_HMAC_SECRET) < 32:
+                    raise ValueError("A unique 32+ character WALLET_IDENTITY_HMAC_SECRET is required when wallet monitoring is enabled.")
+                if not self.APP_PUBLIC_URL.startswith("https://"):
+                    raise ValueError("APP_PUBLIC_URL must use HTTPS when wallet monitoring is enabled.")
+
+        if self.NETWORK_OBSERVER_INTERVAL_SECONDS < 15:
+            raise ValueError("NETWORK_OBSERVER_INTERVAL_SECONDS must be at least 15 seconds.")
+        if self.NETWORK_OBSERVER_HISTORY_LIMIT < 10:
+            raise ValueError("NETWORK_OBSERVER_HISTORY_LIMIT must be at least 10.")
+        if not 1 <= self.NETWORK_ALERT_CPU_THRESHOLD <= 100:
+            raise ValueError("NETWORK_ALERT_CPU_THRESHOLD must be between 1 and 100.")
+        return self
+
 
 settings = Settings()
-

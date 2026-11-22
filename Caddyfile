@@ -1,0 +1,18 @@
+{$SMARTNET_DOMAIN} {
+    encode zstd gzip
+
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        -Server
+    }
+
+    @backend path /auth/* /api/* /mikrotik/* /cards/* /client/* /uploads/* /static/*
+    reverse_proxy @backend 127.0.0.1:8000
+
+    root * {$SMARTNET_WEB_ROOT}
+    try_files {path} /index.html
+    file_server
+}

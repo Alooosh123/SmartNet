@@ -1,0 +1,27 @@
+[Unit]
+Description=SmartNet FastAPI backend
+After=network-online.target mariadb.service
+Wants=network-online.target
+Requires=mariadb.service
+
+[Service]
+Type=simple
+User=smartnet
+Group=smartnet
+WorkingDirectory=/opt/smartnet/backend
+EnvironmentFile=/opt/smartnet/backend/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/opt/smartnet/backend/.venv/bin/alembic upgrade head
+ExecStart=/opt/smartnet/backend/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/smartnet/backend/uploads /opt/smartnet/backend/static
+
+[Install]
+WantedBy=multi-user.target

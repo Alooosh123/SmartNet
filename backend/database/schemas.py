@@ -1,6 +1,7 @@
-from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+from decimal import Decimal
+from pydantic import BaseModel, Field, field_validator
 
 class Token(BaseModel):
     access_token: str
@@ -37,6 +38,11 @@ class AdminCreate(AdminBase):
     password: str
 
 
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class RegistrationCreate(BaseModel):
     username: str
     password: str
@@ -48,8 +54,14 @@ class RegistrationResponse(BaseModel):
     username: str
     plan: Optional[str] = "monthly"
     price: Optional[int] = 20
+    currency: str = "USD"
     paid: bool
     payment_ref: Optional[str] = None
+    payment_verified_amount: Optional[Decimal] = None
+    payment_verified_currency: Optional[str] = None
+    payment_verified_by: Optional[str] = None
+    payment_verified_at: Optional[datetime] = None
+    payment_verification_note: Optional[str] = None
     receipt_image: Optional[str] = None
     processed: bool
     payment_message: Optional[str] = None
@@ -66,7 +78,6 @@ class CardBatchResponse(BaseModel):
     profile: str
     count: int
     created_at: datetime
-    pdf_path: Optional[str]
     model_config = {"from_attributes": True}
 
 
@@ -125,3 +136,23 @@ class OwnerNotificationResponse(BaseModel):
     unpaid_count: int
     paid_pending_count: int
     recent_requests: List[RegistrationResponse]
+
+
+class ManualPaymentVerification(BaseModel):
+    payment_reference: str = Field(min_length=4, max_length=120)
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    note: str = Field(min_length=6, max_length=500)
+
+    @field_validator("payment_reference")
+    @classmethod
+    def clean_reference(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned or cleaned.lower().startswith(("smartnet-", "test-", "demo-")):
+            raise ValueError("أدخل مرجع حوالة حقيقياً غير تجريبي.")
+        return cleaned
+
+    @field_validator("currency")
+    @classmethod
+    def normalize_currency(cls, value: str) -> str:
+        return value.strip().upper()

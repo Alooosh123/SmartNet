@@ -1,0 +1,11 @@
+# Copy into the MariaDB server configuration directory and review paths for the host OS.
+# Keep the database bound to loopback when the application runs on the same server.
+[mariadb]
+bind-address=127.0.0.1
+port=3306
+character-set-server=utf8mb4
+collation-server=utf8mb4_unicode_ci
+innodb_file_per_table=1
+innodb_flush_log_at_trx_commit=1
+max_connections=150
+skip_name_resolve=1
