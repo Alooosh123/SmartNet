@@ -89,7 +89,38 @@ def main() -> None:
             if forbidden in serialized:
                 fail(f"{path.name} contains a forbidden credential placeholder/default")
 
-    print(f"Validated {len(files)} inactive SmartNet n8n workflows; webhook paths and graph references are unique and valid.")
+    registry_path = ROOT / "automation" / "n8n" / "agent-registry.json"
+    prompt_root = ROOT / "automation" / "n8n"
+    try:
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"Agent registry is missing or invalid: {exc}")
+
+    agents = registry.get("agents", [])
+    if len(agents) != 13:
+        fail(f"Expected 13 registered agents, found {len(agents)}")
+
+    seen_ids = set()
+    for agent in agents:
+        agent_id = str(agent.get("id", ""))
+        if agent_id in seen_ids:
+            fail(f"Duplicate agent ID in registry: {agent_id}")
+        seen_ids.add(agent_id)
+        prompt_path = agent.get("prompt_path")
+        if not prompt_path:
+            fail(f"Agent {agent_id} has no prompt_path")
+        target = (prompt_root / prompt_path).resolve()
+        if not target.is_relative_to(prompt_root.resolve()) or not target.is_file():
+            fail(f"Agent {agent_id} prompt does not resolve to a file inside automation/n8n")
+        if agent.get("llm_status") != "prompt_ready_not_connected":
+            fail(f"Agent {agent_id} must explicitly report that its LLM is not connected")
+        if agent.get("execution_mode") != "deterministic_guardrail":
+            fail(f"Agent {agent_id} must remain in deterministic guardrail mode")
+
+    print(
+        f"Validated {len(files)} inactive n8n workflows and {len(agents)} agent prompt references; "
+        "webhook paths and graph references are unique and valid."
+    )
 
 
 if __name__ == "__main__":
