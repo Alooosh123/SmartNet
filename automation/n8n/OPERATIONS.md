@@ -32,3 +32,8 @@ The default FastAPI URL used by health workflows is `http://127.0.0.1:8000`. If 
 - Keep production workflows inactive until webhook auth, TLS/private network exposure, and role boundaries have been tested.
 - All RouterOS mutations, payment approval, account activation, database restore and production deployment require durable backend approval and audit.
 - A receipt image is not proof of settlement.
+
+
+## Windows local import
+
+See [WINDOWS_INSTALL_AR.md](./WINDOWS_INSTALL_AR.md) for the guarded Windows import process. The PowerShell installer backs up the current n8n workflow set, checks for duplicate SmartNet names, and imports the 13 workflows inactive. It never publishes workflows or writes credentials. Webhook authentication and local runtime checks are required before publishing.
