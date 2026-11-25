@@ -44,6 +44,7 @@ $expected = @(
 
 $files = @(Get-ChildItem -LiteralPath $workflowDir -Filter "*.json" -File)
 $actual = @($files | ForEach-Object { $_.BaseName })
+$workflowNames = @()
 $missing = @($expected | Where-Object { $_ -notin $actual })
 $extra = @($actual | Where-Object { $_ -notin $expected })
 
@@ -58,6 +59,11 @@ foreach ($file in $files) {
     catch {
         Stop-WithError "Invalid JSON in $($file.Name): $($_.Exception.Message)"
     }
+
+    if ([string]::IsNullOrWhiteSpace([string]$workflow.name)) {
+        Stop-WithError "$($file.Name) has no workflow name."
+    }
+    $workflowNames += [string]$workflow.name
 
     if ($workflow.active -ne $false) {
         Stop-WithError "$($file.Name) must have active=false before import."
@@ -84,38 +90,31 @@ if ($LASTEXITCODE -ne 0) {
 $backupRoot = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "SmartNet-n8n-backups"
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $backupDir = Join-Path $backupRoot $stamp
-$backupFile = Join-Path $backupDir "workflows-before-smartnet-import.json"
+$backupFile = $backupDir
 
 New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
 
 Write-Host "Creating a backup of existing n8n workflows..."
-& $n8nPath export:workflow --all "--output=$backupFile"
-if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $backupFile -PathType Leaf)) {
+& $n8nPath export:workflow --backup "--output=$backupFile"
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $backupFile -PathType Container)) {
     Stop-WithError "Could not create a workflow backup. No import was attempted."
 }
 
-try {
-    $backupData = Get-Content -LiteralPath $backupFile -Raw -Encoding UTF8 | ConvertFrom-Json
-}
-catch {
-    Stop-WithError "The workflow backup could not be parsed. No import was attempted."
-}
-
-if ($backupData -is [System.Array]) {
-    $existingWorkflows = @($backupData)
-}
-elseif ($backupData.workflows -is [System.Array]) {
-    $existingWorkflows = @($backupData.workflows)
-}
-elseif ($null -ne $backupData.name) {
-    $existingWorkflows = @($backupData)
-}
-else {
-    $existingWorkflows = @()
+$existingNames = @()
+$backupFiles = @(Get-ChildItem -LiteralPath $backupFile -Filter "*.json" -File -Recurse)
+foreach ($backupWorkflowFile in $backupFiles) {
+    try {
+        $backupWorkflow = Get-Content -LiteralPath $backupWorkflowFile.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch {
+        Stop-WithError "The workflow backup could not be parsed at $($backupWorkflowFile.FullName). No import was attempted."
+    }
+    if ($null -ne $backupWorkflow.name) {
+        $existingNames += [string]$backupWorkflow.name
+    }
 }
 
-$existingNames = @($existingWorkflows | ForEach-Object { $_.name })
-$collisions = @($expected | Where-Object { $_ -in $existingNames })
+$collisions = @($workflowNames | Where-Object { $_ -in $existingNames })
 if ($collisions.Count -gt 0) {
     Stop-WithError ("SmartNet workflow names already exist in this n8n instance: {0}. Import stopped to prevent duplicate workflows. Review them in n8n before proceeding." -f ($collisions -join ", "))
 }
@@ -144,6 +143,6 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host ""
 Write-Host "Import command completed." -ForegroundColor Green
 Write-Host "All workflows are expected to remain inactive. Confirm their status in the n8n editor."
-Write-Host "Backup: $backupFile"
+Write-Host "Backup directory: $backupFile"
 Write-Host ""
 Write-Host "Next: configure webhook authentication and test each read-only path before publishing anything."
