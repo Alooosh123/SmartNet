@@ -64,13 +64,14 @@ function Write-JsonFile {
 function Select-Credential {
     param(
         [object[]]$Candidates,
-        [string]$Label
+        [string]$Label,
+        [switch]$ForceSelection
     )
     $list = @($Candidates)
     if ($list.Count -eq 0) {
         throw "No local $Label credential was found. Create it in n8n Credentials first; no workflows were updated."
     }
-    if ($list.Count -eq 1) { return $list[0] }
+    if ($list.Count -eq 1 -and -not $ForceSelection) { return $list[0] }
 
     Write-Host ""
     Write-Host "Available $Label credentials (names and IDs only; secret values are never displayed):" -ForegroundColor Cyan
@@ -175,13 +176,16 @@ try {
     $HeaderCandidates = @($CredentialRecords | Where-Object { $_.type -eq "httpHeaderAuth" } | ForEach-Object {
         [pscustomobject]@{ id = [string]$_.id; name = [string]$_.name }
     })
-    $HeaderCredential = Select-Credential -Candidates $HeaderCandidates -Label "Webhook Header Auth"
+    $HeaderCredential = Select-Credential -Candidates $HeaderCandidates -Label "Webhook Header Auth" -ForceSelection
+    if ($HeaderCredential.name -ne "SmartNet Agents Header Auth") {
+        throw "Create a dedicated n8n Header Auth credential named SmartNet Agents Header Auth, with header X-SmartNet-Agent-Key, then rerun. No workflows were updated."
+    }
     if (-not $OpenAiCredential.id -or -not $HeaderCredential.id) {
         throw "Local credential metadata is incomplete. No workflows were updated."
     }
 
     Write-Host "OpenAI credential selected: $($OpenAiCredential.name) (secret omitted)"
-    Write-Host "Shared Webhook Header Auth selected: $($HeaderCredential.name) (secret omitted)"
+    Write-Host "Dedicated Webhook Header Auth selected: $($HeaderCredential.name) (secret omitted)"
     Write-Host "Credential secret values were not decrypted or displayed."
 
     Write-Host ""
