@@ -47,6 +47,14 @@ class AgentInvokeRequest(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
     request_id: str = Field(default_factory=lambda: str(uuid.uuid4()), min_length=8, max_length=80)
 
+    @field_validator("request_id")
+    @classmethod
+    def validate_request_id(cls, value: str) -> str:
+        try:
+            return str(uuid.UUID(value))
+        except ValueError as exc:
+            raise ValueError("request_id must be a UUID and must not contain free text.") from exc
+
     @field_validator("payload")
     @classmethod
     def validate_payload(cls, value: dict[str, Any]) -> dict[str, Any]:
@@ -59,6 +67,14 @@ class AgentDispatchRequest(BaseModel):
     task: str = Field(min_length=1, max_length=80)
     payload: dict[str, Any] = Field(default_factory=dict)
     request_id: str = Field(default_factory=lambda: str(uuid.uuid4()), min_length=8, max_length=80)
+
+    @field_validator("request_id")
+    @classmethod
+    def validate_request_id(cls, value: str) -> str:
+        try:
+            return str(uuid.UUID(value))
+        except ValueError as exc:
+            raise ValueError("request_id must be a UUID and must not contain free text.") from exc
 
     @field_validator("payload")
     @classmethod
