@@ -14,7 +14,11 @@
       "prompt_path": "prompts/00-supervisor.md",
       "llm_status": "nodes_wired_local_credential_binding_required",
       "execution_mode": "deterministic_guardrail_with_llm_advisory",
-      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git"
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "01",
@@ -25,7 +29,11 @@
       "prompt_path": "prompts/01-repository-auditor.md",
       "llm_status": "nodes_wired_local_credential_binding_required",
       "execution_mode": "deterministic_guardrail_with_llm_advisory",
-      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git"
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "02",
@@ -36,7 +44,11 @@
       "prompt_path": "prompts/02-security-auditor.md",
       "llm_status": "nodes_wired_local_credential_binding_required",
       "execution_mode": "deterministic_guardrail_with_llm_advisory",
-      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git"
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "03",
@@ -47,7 +59,11 @@
       "prompt_path": "prompts/03-rbac-reviewer.md",
       "llm_status": "nodes_wired_local_credential_binding_required",
       "execution_mode": "deterministic_guardrail_with_llm_advisory",
-      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git"
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "04",
@@ -58,7 +74,11 @@
       "prompt_path": "prompts/04-database-backup-reviewer.md",
       "llm_status": "nodes_wired_local_credential_binding_required",
       "execution_mode": "deterministic_guardrail_with_llm_advisory",
-      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git"
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "05",
@@ -69,7 +89,11 @@
       "prompt_path": "prompts/05-mikrotik-test-gate.md",
       "llm_status": "nodes_wired_local_credential_binding_required",
       "execution_mode": "deterministic_guardrail_with_llm_advisory",
-      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git"
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "06",
@@ -80,7 +104,11 @@
       "prompt_path": "prompts/06-network-monitor.md",
       "llm_status": "nodes_wired_local_credential_binding_required",
       "execution_mode": "deterministic_guardrail_with_llm_advisory",
-      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git"
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "07",
@@ -91,7 +119,11 @@
       "prompt_path": "prompts/07-network-diagnosis.md",
       "llm_status": "nodes_wired_local_credential_binding_required",
       "execution_mode": "deterministic_guardrail_with_llm_advisory",
-      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git"
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "08",
@@ -102,7 +134,11 @@
       "prompt_path": "prompts/08-payment-intake.md",
       "llm_status": "nodes_wired_local_credential_binding_required",
       "execution_mode": "deterministic_guardrail_with_llm_advisory",
-      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git"
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "09",
@@ -113,7 +149,11 @@
       "prompt_path": "prompts/09-financial-reconciliation.md",
       "llm_status": "nodes_wired_local_credential_binding_required",
       "execution_mode": "deterministic_guardrail_with_llm_advisory",
-      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git"
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "10",
@@ -124,7 +164,11 @@
       "prompt_path": "prompts/10-human-approval.md",
       "llm_status": "nodes_wired_local_credential_binding_required",
       "execution_mode": "deterministic_guardrail_with_llm_advisory",
-      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git"
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "11",
@@ -135,7 +179,11 @@
       "prompt_path": "prompts/11-qa-engineer.md",
       "llm_status": "nodes_wired_local_credential_binding_required",
       "execution_mode": "deterministic_guardrail_with_llm_advisory",
-      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git"
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "12",
@@ -146,8 +194,12 @@
       "prompt_path": "prompts/12-release-preflight.md",
       "llm_status": "nodes_wired_local_credential_binding_required",
       "execution_mode": "deterministic_guardrail_with_llm_advisory",
-      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git"
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     }
   ],
-  "prompt_contract": "Each of the 13 workflow JSON files now contains an n8n AI Agent v3.1 and OpenAI Chat Model v1.2 connected through ai_languageModel. Arabic system prompts are embedded as system messages. The OpenAI credential ID and Webhook Header Auth credential ID are intentionally omitted from Git and are injected from the local n8n credential store by Update-And-Test-SmartNetAgents.ps1. The model receives minimized advisory context only; deterministic Code nodes remain authoritative and no write tools are connected."
+  "prompt_contract": "Each workflow contains n8n AI Agent v3.1 and OpenAI Chat Model v1.2 using gpt-6-luna connected through ai_languageModel. Arabic system prompts are embedded. OpenAI and Header Auth credential IDs are omitted from Git and injected locally by Update-And-Test-SmartNetAgents.ps1. The Backend bridge minimizes sensitive fields before sending webhook payloads. The model is advisory only; deterministic Code nodes remain authoritative; no write tools are connected."
 }
