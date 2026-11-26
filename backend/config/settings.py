@@ -99,7 +99,11 @@ class Settings(BaseSettings):
         if not 2 <= self.N8N_TIMEOUT_SECONDS <= 60:
             raise ValueError("N8N_TIMEOUT_SECONDS must be between 2 and 60.")
         allowed_header_chars = "!#$%&'*+-.^_`|~"
-        if not self.N8N_WEBHOOK_AUTH_HEADER or any(not (ch.isalnum() or ch in allowed_header_chars) for ch in self.N8N_WEBHOOK_AUTH_HEADER):
+        if (
+            not self.N8N_WEBHOOK_AUTH_HEADER
+            or len(self.N8N_WEBHOOK_AUTH_HEADER) > 128
+            or any(not ch.isascii() or not (ch.isalnum() or ch in allowed_header_chars) for ch in self.N8N_WEBHOOK_AUTH_HEADER)
+        ):
             raise ValueError("N8N_WEBHOOK_AUTH_HEADER must be a valid HTTP header name.")
         if self.N8N_ENABLED:
             if not self.N8N_BASE_URL or not self.N8N_WEBHOOK_AUTH_VALUE:
