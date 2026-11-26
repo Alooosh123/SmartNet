@@ -1,1 +1,226 @@
-{"name":"SmartNet Agent 10 - Human Approval Gate","nodes":[{"parameters":{"httpMethod":"POST","path":"smartnet/agents/10-human-approval-gate","responseMode":"responseNode","options":{}},"id":"10-human-approval-gate-webhook","name":"Webhook Trigger","type":"n8n-nodes-base.webhook","typeVersion":2.1,"position":[240,300],"webhookId":"10-human-approval-gate-hook"},{"parameters":{"jsCode":"const x=$json.body??$json;const allowed=['router_reboot','disconnect_user','firewall_change','hotspot_user_create','payment_approval','subscription_activation','database_restore','production_deploy'];const a=String(x.action||'');if(!allowed.includes(a))return [{json:{agent:'10-human-approval-gate',status:'rejected_unknown_action',action:a,execution_performed:false}}];return [{json:{agent:'10-human-approval-gate',status:'awaiting_human_approval',request_id:x.request_id||'approval-'+Date.now(),action:a,target:x.target||null,reason:x.reason||null,approver_role:['payment_approval','subscription_activation'].includes(a)?'finance_or_owner':'owner_or_network_admin',backend_durable_approval_required:true,execution_performed:false}}];"},"id":"10-human-approval-gate-code","name":"Evaluate request","type":"n8n-nodes-base.code","typeVersion":2,"position":[500,300]},{"parameters":{"respondWith":"json","responseBody":"={{ $json }}","options":{"responseCode":200}},"id":"10-human-approval-gate-response","name":"Respond to Webhook","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[760,300]}],"connections":{"Webhook Trigger":{"main":[[{"node":"Evaluate request","type":"main","index":0}]]},"Evaluate request":{"main":[[{"node":"Respond to Webhook","type":"main","index":0}]]}},"active":false,"settings":{"executionOrder":"v1"},"versionId":"10-human-approval-gate-v1","meta":{"description":"Captures approval request; does not execute action.","templateCredsSetupCompleted":false},"tags":[]}
+{
+  "name": "SmartNet Agent 10 - Human Approval Gate",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smartnet/agents/10-human-approval-gate",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "id": "10-human-approval-gate-webhook",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "10-human-approval-gate-hook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$json.body??$json;const allowed=['router_reboot','disconnect_user','firewall_change','hotspot_user_create','payment_approval','subscription_activation','database_restore','production_deploy'];const a=String(x.action||'');if(!allowed.includes(a))return [{json:{agent:'10-human-approval-gate',status:'rejected_unknown_action',action:a,execution_performed:false}}];return [{json:{agent:'10-human-approval-gate',status:'awaiting_human_approval',request_id:x.request_id||'approval-'+Date.now(),action:a,target:x.target||null,reason:x.reason||null,approver_role:['payment_approval','subscription_activation'].includes(a)?'finance_or_owner':'owner_or_network_admin',backend_durable_approval_required:true,execution_performed:false}}];"
+      },
+      "id": "10-human-approval-gate-code",
+      "name": "Evaluate request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "10-human-approval-gate-response",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        760,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "10-manual-smoke-trigger",
+      "name": "Manual Trigger - Safe Smoke Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$json||{};const ai_context={agent:r.agent||'10-human-approval-gate',status:r.status,action:r.action||null,approver_role:r.approver_role||null,backend_durable_approval_required:r.backend_durable_approval_required===true,target_provided:!!r.target,reason_provided:!!r.reason,execution_performed:false};return [{json:{ai_context}}];"
+      },
+      "id": "10-prepare-ai-context",
+      "name": "Prepare Minimized AI Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.ai_context) }}",
+        "hasOutputParser": false,
+        "needsFallback": false,
+        "options": {
+          "systemMessage": "# الوكيل 10 – منسق الموافقات البشرية\n\nأنت منسق طلبات الموافقة. تأكد أن العملية محددة ومفهومة وموجهة لصاحب الصلاحية، وأن الموافقة صريحة ومحددة النطاق ومرتبطة بطلب موثق.\n\nاعرض action وtarget وreason وimpact وrollback وrequested_by وrequired_approver_role وexpires_at. طبّق فصل الواجبات: لا يوافق طالب العملية على طلبه. افصل الموافقات المالية عن الشبكية، واجعل الموافقة لمرة واحدة وبنطاق محدد.\n\nيمكنك إنشاء طلب موافقة أو عرض حالته فقط. لا تنفذ العملية بعد الموافقة؛ يجب أن يتحقق Backend من approval_id ويستهلك الموافقة ذرياً.\n\nلا تقبل كلمة موافق مبهمة أو موافقة من حساب غير مصرح. سجل الرفض وانتهاء المهلة. أخرج JSON يتضمن approval_request وrequired_role وscope وexpiry وexecution_performed=false.\n\nضوابط تنفيذ إضافية إلزامية:\n- حلّل فقط كائن JSON المصغّر الذي تستلمه في ai_context، ولا تطلب أو تخمّن بيانات حساسة محذوفة.\n- لا تستخدم أدوات خارجية ولا تنفذ أوامر أو تغييرات؛ لا توجد أدوات تنفيذ موصولة بك.\n- لا تغيّر الحالة الحتمية أو تستبدل قرار كود التحقق. اكتب رأياً تفسيرياً مساعداً فقط.\n- لا تدّع أن فحصاً أو اتصالاً أو اختباراً قد حدث ما لم يظهر في مدخلاتك دليل صريح.\n- عند نقص الدليل، قل ذلك بوضوح. أخرج JSON صحيحاً قدر الإمكان، دون Markdown fences.",
+          "maxIterations": 3,
+          "returnIntermediateSteps": false,
+          "enableStreaming": false,
+          "autoSaveHighlightedData": false
+        }
+      },
+      "id": "10-ai-agent",
+      "name": "AI Agent - Advisory",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1270,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "options": {
+          "temperature": 0.2,
+          "maxTokens": 900,
+          "timeout": 60000,
+          "maxRetries": 1
+        }
+      },
+      "id": "10-openai-chat-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1280,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const baseline = $('Evaluate request').first().json;\nconst content = (typeof $json.output === 'string' && $json.output.trim()) ? $json.output.trim() : null;\nconst failed = !content || Boolean($json.error);\nreturn [{ json: {\n  ...baseline,\n  ai_advisory: { provider: 'OpenAI', status: failed ? 'unavailable' : 'completed', content: content, note: failed ? 'تعذر الحصول على تحليل النموذج؛ تم الاحتفاظ بنتيجة التحقق الحتمية.' : 'هذه توصية تفسيرية فقط ولا تغيّر نتيجة التحقق الحتمية.' },\n  execution_authority: 'read_only_advisory',\n  side_effects_performed: false,\n} }];"
+      },
+      "id": "10-finalize-ai-advice",
+      "name": "Finalize AI Advisory",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1550,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Evaluate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger - Safe Smoke Test": {
+      "main": [
+        [
+          {
+            "node": "Evaluate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate request": {
+      "main": [
+        [
+          {
+            "node": "Prepare Minimized AI Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Minimized AI Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Advisory",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Advisory": {
+      "main": [
+        [
+          {
+            "node": "Finalize AI Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize AI Advisory": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "10-human-approval-gate-n8n2495-ai-v1",
+  "meta": {
+    "description": "Captures approval request; does not execute action.. OpenAI AI Agent advisory attached; deterministic checks preserved; local Header Auth credential is bound by updater; inactive by default.",
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
