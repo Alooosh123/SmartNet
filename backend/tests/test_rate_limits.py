@@ -18,6 +18,12 @@ def test_sensitive_network_and_card_mutations_have_rate_limits():
     assert _rate_limit_policy("GET", "/auth/login") is None
 
 
+def test_n8n_automation_invocations_have_rate_limits():
+    assert _rate_limit_policy("POST", "/api/v1/automation/dispatch") == ("n8n-agent-dispatch", 5, 60)
+    assert _rate_limit_policy("POST", "/api/v1/automation/agents/01/invoke") == ("n8n-agent-direct-invoke", 5, 60)
+    assert _rate_limit_policy("GET", "/api/v1/automation/dispatch") is None
+
+
 def test_rate_limiter_blocks_excess_calls_and_recovers_after_window():
     for attempt in range(5):
         assert _consume_rate_limit("198.51.100.10", "login", 5, 60, now=float(attempt)) is None
