@@ -297,11 +297,14 @@ try {
     Write-Host "[7/7] Publication decision..." -ForegroundColor Cyan
     if ($PublishAfterSmokeTests) {
         $httpsConfigured = (($env:WEBHOOK_URL -like "https://*") -or ($env:N8N_PROTOCOL -eq "https"))
+        $localHost = $env:N8N_HOST
+        $loopbackHost = ($localHost -in @("localhost", "127.0.0.1", "::1"))
+        $localHttpApproved = ($env:SMARTNET_ALLOW_LOCAL_HTTP_PUBLISH -eq "YES") -and ($env:N8N_PROTOCOL -eq "http") -and $loopbackHost -and ($env:ENVIRONMENT -ne "production")
         $explicitPublishGate = ($env:SMARTNET_ALLOW_WEBHOOK_PUBLISH -eq "YES")
         if (-not $explicitPublishGate) {
-            Write-Warning "Publication skipped: set SMARTNET_ALLOW_WEBHOOK_PUBLISH=YES only after manually verifying caller integration, HTTPS/TLS, reverse proxy, firewall, and the shared Header Auth secret. Workflows remain unpublished."
-        } elseif (-not $httpsConfigured) {
-            Write-Warning "Publication skipped: WEBHOOK_URL must start with https:// or N8N_PROTOCOL must be https. Workflows remain unpublished."
+            Write-Warning "Publication skipped: set SMARTNET_ALLOW_WEBHOOK_PUBLISH=YES only after manually verifying caller integration and the chosen secure local/private endpoint. Workflows remain unpublished."
+        } elseif (-not ($httpsConfigured -or $localHttpApproved)) {
+            Write-Warning "Publication skipped: use HTTPS, or explicitly allow HTTP only when N8N_HOST is localhost/127.0.0.1/::1, N8N_PROTOCOL=http, ENVIRONMENT is not production, and SMARTNET_ALLOW_LOCAL_HTTP_PUBLISH=YES."
         } elseif (-not $allSmokePassed) {
             Write-Warning "Publication skipped: one or more local smoke tests failed. Workflows remain unpublished."
         } else {
@@ -319,7 +322,7 @@ try {
             }
         }
     } else {
-        Write-Host "Workflows remain unpublished. Add -PublishAfterSmokeTests only after HTTPS / private-network exposure is verified."
+        Write-Host "Workflows remain unpublished. Use -PublishAfterSmokeTests only after verifying the local caller and Header Auth. Public endpoints require HTTPS; HTTP is allowed only with an explicit loopback-only development gate."
     }
 
     $Success = $true
@@ -340,7 +343,7 @@ try {
         smoke_tests = $SmokeResults
         all_smoke_tests_passed = $allSmokePassed
         published_count = $Published.Count
-        publication_attempted_only_with_explicit_publish_gate_https_and_all_tests_passed = $true
+        publication_attempted_only_with_explicit_gate_https_or_loopback_dev_and_all_tests_passed = $true
         backup_directory = $BackupRoot
         smoke_log_directory = $SmokeLogs
         note = "AI Agent output is advisory only. Deterministic checks remain authoritative. No router, payment, ledger, customer account, or production database mutation tools are connected."
