@@ -52,16 +52,34 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 
 للتطوير على نفس جهاز Windows فقط، وبعد التأكد أن n8n لا يستمع على واجهة الشبكة العامة، يمكن استخدام loopback:
 
+شغّل n8n نفسه في نافذة PowerShell مستقلة، بعد إيقاف أي عملية n8n سابقة، وبمتغيرات ربط loopback التالية:
+
 ~~~powershell
 $env:N8N_HOST = "127.0.0.1"
+$env:N8N_LISTEN_ADDRESS = "127.0.0.1"
 $env:N8N_PROTOCOL = "http"
+$env:N8N_PORT = "5678"
+$env:ENVIRONMENT = "development"
+n8n start
+~~~
+
+في نافذة PowerShell ثانية، نفّذ المحدث بعد نجاح الاختبارات مع بوابات النشر الصريحة:
+
+~~~powershell
+cd D:\SmartNet
+$env:N8N_HOST = "127.0.0.1"
+$env:N8N_LISTEN_ADDRESS = "127.0.0.1"
+$env:N8N_PROTOCOL = "http"
+$env:N8N_PORT = "5678"
 $env:ENVIRONMENT = "development"
 $env:SMARTNET_ALLOW_LOCAL_HTTP_PUBLISH = "YES"
 $env:SMARTNET_ALLOW_WEBHOOK_PUBLISH = "YES"
 .\automation\n8n\scripts\Update-And-Test-SmartNetAgents.ps1 -PublishAfterSmokeTests
 ~~~
 
-لن يحاول المحدث النشر عبر HTTP إلا عندما يكون N8N_HOST هو localhost أو 127.0.0.1 أو ::1، والبروتوكول HTTP والبيئة غير إنتاجية، مع تعيين متغيري الموافقة صراحةً، وبعد نجاح الاختبارات الـ13.
+قبل النشر، يتحقق المحدث عبر Windows من أن منفذ n8n يستمع فعلياً على `127.0.0.1` أو `::1` فقط؛ إذا كان يستمع على `0.0.0.0` أو `::` أو أي واجهة أخرى، سيرفض النشر. لا يكفي تعيين `N8N_HOST` وحده.
+
+لن يحاول المحدث النشر عبر HTTP إلا عندما يكون N8N_HOST وN8N_LISTEN_ADDRESS عنواني loopback، ويؤكد Windows أن مستمع TCP الفعلي لا يرتبط إلا بـ127.0.0.1 أو ::1، والبروتوكول HTTP والبيئة غير إنتاجية، مع تعيين متغيري الموافقة صراحةً، وبعد نجاح اختبارات OpenAI الـ13.
 
 لخادم أو عنوان عام، استخدم HTTPS وشهادة صالحة وReverse Proxy وجداراً نارياً، واضبط WEBHOOK_URL أو N8N_PROTOCOL وفق إعداد الإنتاج. لا تستخدم بوابة HTTP المحلية على الإنتاج.
 

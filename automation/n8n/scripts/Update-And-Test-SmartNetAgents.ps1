@@ -307,12 +307,44 @@ try {
         $httpsConfigured = (($env:WEBHOOK_URL -like "https://*") -or ($env:N8N_PROTOCOL -eq "https"))
         $localHost = $env:N8N_HOST
         $loopbackHost = ($localHost -in @("localhost", "127.0.0.1", "::1"))
-        $localHttpApproved = ($env:SMARTNET_ALLOW_LOCAL_HTTP_PUBLISH -eq "YES") -and ($env:N8N_PROTOCOL -eq "http") -and $loopbackHost -and ($env:ENVIRONMENT -ne "production")
+        $loopbackListenAddress = $env:N8N_LISTEN_ADDRESS
+        $loopbackListenerVerified = $false
+        $listenerAddresses = @()
+        if ($loopbackHost -and $env:N8N_PROTOCOL -eq "http") {
+            $listenPort = 5678
+            if ($env:N8N_PORT) {
+                $parsedPort = 0
+                if (-not [int]::TryParse($env:N8N_PORT, [ref]$parsedPort) -or $parsedPort -lt 1 -or $parsedPort -gt 65535) {
+                    throw "N8N_PORT must be a valid TCP port before loopback publication."
+                }
+                $listenPort = $parsedPort
+            }
+            try {
+                $listenerAddresses = @(
+                    Get-NetTCPConnection -State Listen -LocalPort $listenPort -ErrorAction Stop |
+                        Select-Object -ExpandProperty LocalAddress -Unique
+                )
+                $loopbackListenerVerified = (
+                    $listenerAddresses.Count -gt 0 -and
+                    @($listenerAddresses | Where-Object { $_ -notin @("127.0.0.1", "::1") }).Count -eq 0
+                )
+            } catch {
+                $loopbackListenerVerified = $false
+            }
+        }
+        $localHttpApproved = (
+            $env:SMARTNET_ALLOW_LOCAL_HTTP_PUBLISH -eq "YES" -and
+            $env:N8N_PROTOCOL -eq "http" -and
+            $loopbackHost -and
+            $loopbackListenAddress -in @("127.0.0.1", "::1") -and
+            $loopbackListenerVerified -and
+            $env:ENVIRONMENT -ne "production"
+        )
         $explicitPublishGate = ($env:SMARTNET_ALLOW_WEBHOOK_PUBLISH -eq "YES")
         if (-not $explicitPublishGate) {
             Write-Warning "Publication skipped: set SMARTNET_ALLOW_WEBHOOK_PUBLISH=YES only after manually verifying caller integration and the chosen secure local/private endpoint. Workflows remain unpublished."
         } elseif (-not ($httpsConfigured -or $localHttpApproved)) {
-            Write-Warning "Publication skipped: use HTTPS, or explicitly allow HTTP only when N8N_HOST is localhost/127.0.0.1/::1, N8N_PROTOCOL=http, ENVIRONMENT is not production, and SMARTNET_ALLOW_LOCAL_HTTP_PUBLISH=YES."
+            Write-Warning ("Publication skipped: use HTTPS, or prove loopback-only HTTP with N8N_HOST, N8N_LISTEN_ADDRESS, the actual listener bound only to 127.0.0.1/::1, N8N_PROTOCOL=http, non-production ENVIRONMENT, and both explicit local publish gates. Listener addresses seen: {0}" -f ($listenerAddresses -join ", "))
         } elseif (-not $allSmokePassed) {
             Write-Warning "Publication skipped: one or more local smoke tests failed. Workflows remain unpublished."
         } else {

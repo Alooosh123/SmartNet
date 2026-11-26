@@ -214,6 +214,9 @@ def main() -> None:
         "openai_response_marker_found",
         "export:credentials --all",
         "SmartNet Agents Header Auth",
+        "Get-NetTCPConnection -State Listen",
+        "N8N_LISTEN_ADDRESS",
+        "loopbackListenerVerified",
     ):
         if required_updater_marker not in updater_text:
             fail(f"Local updater is missing real-provider smoke-test requirement {required_updater_marker!r}")
