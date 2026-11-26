@@ -21,7 +21,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const x=$json.body??$json;const allowed=['router_reboot','disconnect_user','firewall_change','hotspot_user_create','payment_approval','subscription_activation','database_restore','production_deploy'];const a=String(x.action||'');if(!allowed.includes(a))return [{json:{agent:'10-human-approval-gate',status:'rejected_unknown_action',action:a,execution_performed:false}}];return [{json:{agent:'10-human-approval-gate',status:'awaiting_human_approval',request_id:x.request_id||'approval-'+Date.now(),action:a,target:x.target||null,reason:x.reason||null,approver_role:['payment_approval','subscription_activation'].includes(a)?'finance_or_owner':'owner_or_network_admin',backend_durable_approval_required:true,execution_performed:false}}];"
+        "jsCode": "const x=$json.body??$json;const allowed=['router_reboot','disconnect_user','firewall_change','hotspot_user_create','payment_approval','subscription_activation','database_restore','production_deploy'];const a=String(x.action||'');const targetPresent=x.target_present===true||!!x.target;const reasonPresent=x.reason_present===true||!!x.reason;if(!allowed.includes(a))return [{json:{agent:'10-human-approval-gate',status:'rejected_unknown_action',action:a,target:null,reason:null,target_present:targetPresent,reason_present:reasonPresent,execution_performed:false}}];return [{json:{agent:'10-human-approval-gate',status:'awaiting_human_approval',request_id:x.request_id||'approval-'+Date.now(),action:a,target:null,reason:null,target_present:targetPresent,reason_present:reasonPresent,approver_role:['payment_approval','subscription_activation'].includes(a)?'finance_or_owner':'owner_or_network_admin',backend_durable_approval_required:true,execution_performed:false}}];"
       },
       "id": "10-human-approval-gate-code",
       "name": "Evaluate request",
@@ -62,7 +62,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$json||{};const ai_context={agent:r.agent||'10-human-approval-gate',status:r.status,action:r.action||null,approver_role:r.approver_role||null,backend_durable_approval_required:r.backend_durable_approval_required===true,target_provided:!!r.target,reason_provided:!!r.reason,execution_performed:false};return [{json:{ai_context}}];"
+        "jsCode": "const r=$json||{};const ai_context={agent:r.agent||'10-human-approval-gate',status:r.status,action:r.action||null,approver_role:r.approver_role||null,backend_durable_approval_required:r.backend_durable_approval_required===true,target_provided:r.target_present===true||!!r.target,reason_provided:r.reason_present===true||!!r.reason,execution_performed:false};return [{json:{ai_context}}];"
       },
       "id": "10-prepare-ai-context",
       "name": "Prepare Minimized AI Context",
