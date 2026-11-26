@@ -212,7 +212,7 @@ def main() -> None:
         "--rawOutput",
         "SMARTNET_OPENAI_SMOKE_TEST_PASS",
         "openai_response_marker_found",
-        "n8n export:credentials",
+        "export:credentials --all",
         "SmartNet Agents Header Auth",
     ):
         if required_updater_marker not in updater_text:
