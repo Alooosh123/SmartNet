@@ -21,7 +21,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const x=$json.body??$json;const a=x.expected||{},b=x.received||{},issues=[];if(a.transaction_ref&&b.transaction_ref&&a.transaction_ref!==b.transaction_ref)issues.push('transaction_reference_mismatch');if(a.amount!=null&&b.amount!=null&&Number(a.amount)!==Number(b.amount))issues.push('amount_mismatch');if(a.currency&&b.currency&&String(a.currency).toUpperCase()!==String(b.currency).toUpperCase())issues.push('currency_mismatch');if(a.recipient&&b.recipient&&a.recipient!==b.recipient)issues.push('recipient_mismatch');return [{json:{agent:'09-financial-reconciliation',status:issues.length?'needs_finance_review':'candidate_match_not_final',issues,expected:a,received:b,finance_approval_required:true,ledger_updated:false,subscription_activated:false}}];"
+        "jsCode": "const x=$json.body??$json;const a=x.expected||{},b=x.received||{},issues=Array.isArray(x.issues)?x.issues:[];return [{json:{agent:'09-financial-reconciliation',status:issues.length?'needs_finance_review':'candidate_match_not_final',issues,expected:a,received:b,finance_approval_required:true,ledger_updated:false,subscription_activated:false}}];"
       },
       "id": "09-financial-reconciliation-code",
       "name": "Evaluate request",
@@ -62,7 +62,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$json||{};const a=r.expected||{},b=r.received||{};const ai_context={agent:r.agent||'09-financial-reconciliation',status:r.status,issues:r.issues||[],expected_transaction_ref_present:!!a.transaction_ref,received_transaction_ref_present:!!b.transaction_ref,expected_amount_present:a.amount!==undefined&&a.amount!==null,received_amount_present:b.amount!==undefined&&b.amount!==null,expected_currency_present:!!a.currency,received_currency_present:!!b.currency,expected_recipient_present:!!a.recipient,received_recipient_present:!!b.recipient,finance_approval_required:true,ledger_updated:false,subscription_activated:false};return [{json:{ai_context}}];"
+        "jsCode": "const r=$json||{};const a=r.expected||{},b=r.received||{};const ai_context={agent:r.agent||'09-financial-reconciliation',status:r.status,issues:r.issues||[],expected_transaction_ref_present:a.transaction_ref_present===true,received_transaction_ref_present:b.transaction_ref_present===true,expected_amount_present:a.amount_present===true,received_amount_present:b.amount_present===true,expected_currency_present:a.currency_present===true,received_currency_present:b.currency_present===true,expected_recipient_present:a.recipient_present===true,received_recipient_present:b.recipient_present===true,finance_approval_required:true,ledger_updated:false,subscription_activated:false};return [{json:{ai_context}}];"
       },
       "id": "09-prepare-ai-context",
       "name": "Prepare Minimized AI Context",
