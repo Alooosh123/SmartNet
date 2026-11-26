@@ -22,7 +22,7 @@
 
 ## تحديث الوكلاء التي استوردتها مسبقاً
 
-لقد استوردت الـ13 Workflow من قبل، ولذلك **لا تشغّل Import-SmartNetAgents.ps1 مرة ثانية**. بعد دمج PR #19 في main، نفّذ:
+لقد استوردت الـ13 Workflow من قبل، ولذلك **لا تشغّل Import-SmartNetAgents.ps1 مرة ثانية**. بعد دمج PR #20 الخاص بربط وكلاء الذكاء الاصطناعي في main، نفّذ:
 
 ~~~powershell
 cd D:\SmartNet
