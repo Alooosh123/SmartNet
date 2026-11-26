@@ -202,7 +202,14 @@ try {
             throw "Workflow '$existingName' is currently active/published. This updater refuses to replace a published workflow."
         }
 
-        $source.id = [string]$local.id
+        # Source workflow JSON files intentionally omit the local n8n workflow ID.
+        # On PSCustomObject, direct assignment to a missing property throws; add it
+        # explicitly before import so the existing local workflow is updated in place.
+        if ($source.PSObject.Properties.Name -contains "id") {
+            $source.id = [string]$local.id
+        } else {
+            $source | Add-Member -NotePropertyName "id" -NotePropertyValue ([string]$local.id)
+        }
         $source.active = $false
         if ($local.settings) { $source.settings = $local.settings }
         if ($local.tags) { $source.tags = $local.tags }
