@@ -272,11 +272,23 @@ try {
         if (-not $agentNode -or -not $modelNode -or -not $webhookNode) { throw "Missing AI/Webhook node in $($source.name)." }
         if ($modelNode.credentials.openAiApi.id -ne $OpenAiCredential.id) { throw "OpenAI credential binding mismatch in $($source.name)." }
         if ($webhookNode.credentials.httpHeaderAuth.id -ne $HeaderCredential.id) { throw "Header Auth binding mismatch in $($source.name)." }
-        $modelConnections = $post.connections[$modelNode.name].ai_languageModel
+        # ConvertFrom-Json returns connections as a PSCustomObject. Resolve node
+        # names (which contain spaces) through PSObject.Properties instead of
+        # attempting hashtable-style indexing on the PSCustomObject.
+        $modelConnectionProperty = $post.connections.PSObject.Properties |
+            Where-Object { $_.Name -eq [string]$modelNode.name } |
+            Select-Object -First 1
+        $modelConnections = @()
+        if ($modelConnectionProperty) {
+            $modelConnections = @($modelConnectionProperty.Value.ai_languageModel)
+        }
         $connected = $false
-        foreach ($branch in $modelConnections) {
-            foreach ($edge in $branch) {
-                if ($edge.node -eq $agentNode.name) { $connected = $true }
+        foreach ($connectionBranch in $modelConnections) {
+            foreach ($edge in @($connectionBranch)) {
+                if ([string]$edge.node -eq [string]$agentNode.name -and
+                    [string]$edge.type -eq "ai_languageModel") {
+                    $connected = $true
+                }
             }
         }
         if (-not $connected) { throw "OpenAI Chat Model is not connected to AI Agent in $($source.name)." }
@@ -409,7 +421,8 @@ try {
     Write-Host "Report: $ReportPath"
 }
 catch {
-    Write-Error $_.Exception.Message
+    $failure = $_
+    Write-Host ("ERROR: {0}" -f $failure.Exception.Message) -ForegroundColor Red
     if ($Updated.Count -gt 0) {
         Write-Warning "An update failed part-way through. Rolling back the workflows already updated from the local backup..."
         foreach ($item in $Updated) {
@@ -421,7 +434,7 @@ catch {
             }
         }
     }
-    throw
+    throw $failure
 }
 finally {
     if (Test-Path -LiteralPath $CredentialTemp) {
