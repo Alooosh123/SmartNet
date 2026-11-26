@@ -110,6 +110,8 @@ def _decimal_equal(left: Any, right: Any) -> bool:
 def _sanitize_payload_for_agent(agent_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Drop sensitive data before n8n stores webhook execution input."""
     request_id = payload.get("request_id")
+    if agent_id in {"01", "02", "06", "11"}:
+        return {"request_id": request_id}
     if agent_id == "08":
         payment = payload.get("payment") if isinstance(payload.get("payment"), dict) else payload
         required = ("provider", "transaction_ref", "amount", "currency", "paid_at")
