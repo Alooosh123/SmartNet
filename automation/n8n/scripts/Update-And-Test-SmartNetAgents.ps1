@@ -279,20 +279,23 @@ try {
     foreach ($file in $AgentFiles) {
         $source = Read-JsonFile (Join-Path $Staging $file)
         $logPath = Join-Path $SmokeLogs ($file + ".log")
-        $args = @("execute", "--id=$($source.id)")
+        $args = @("execute", "--id=$($source.id)", "--rawOutput")
         & $N8nCommand @args *> $logPath
         $exitCode = $LASTEXITCODE
+        $markerFound = Select-String -LiteralPath $logPath -Pattern "SMARTNET_OPENAI_SMOKE_TEST_PASS" -SimpleMatch -Quiet
+        $passed = ($exitCode -eq 0 -and $markerFound)
         $SmokeResults += [pscustomobject]@{
             workflow = $source.name
             workflow_id = [string]$source.id
-            passed = ($exitCode -eq 0)
+            passed = $passed
+            openai_response_marker_found = [bool]$markerFound
             exit_code = $exitCode
             log_file = $logPath
         }
-        if ($exitCode -eq 0) {
-            Write-Host ("PASS  {0}" -f $source.name) -ForegroundColor Green
+        if ($passed) {
+            Write-Host ("PASS  {0} (real OpenAI response marker found)" -f $source.name) -ForegroundColor Green
         } else {
-            Write-Host ("FAIL  {0} (exit {1})" -f $source.name, $exitCode) -ForegroundColor Red
+            Write-Host ("FAIL  {0} (exit {1}, response marker {2})" -f $source.name, $exitCode, $markerFound) -ForegroundColor Red
         }
     }
     $allSmokePassed = (@($SmokeResults | Where-Object { -not $_.passed }).Count -eq 0)
@@ -350,7 +353,7 @@ try {
         publication_attempted_only_with_explicit_gate_https_or_loopback_dev_and_all_tests_passed = $true
         backup_directory = $BackupRoot
         smoke_log_directory = $SmokeLogs
-        note = "AI Agent output is advisory only. Deterministic checks remain authoritative. No router, payment, ledger, customer account, or production database mutation tools are connected."
+        note = "Every smoke test must exit successfully and include SMARTNET_OPENAI_SMOKE_TEST_PASS, emitted only after non-empty OpenAI model output. AI Agent output is advisory only. Deterministic checks remain authoritative. No router, payment, ledger, customer account, or production database mutation tools are connected."
     }
     Write-JsonFile -Path $ReportPath -Value $Report
 
