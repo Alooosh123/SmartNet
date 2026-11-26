@@ -302,7 +302,10 @@ try {
         $args = @("execute", "--id=$($source.id)", "--rawOutput")
         & $N8nCommand @args *> $logPath
         $exitCode = $LASTEXITCODE
-        $markerFound = Select-String -LiteralPath $logPath -Pattern "SMARTNET_OPENAI_SMOKE_TEST_PASS" -SimpleMatch -Quiet
+        # Match the serialized result field only. A failed n8n CLI trace can include
+        # the JavaScript source code containing the marker literal; a plain substring
+        # search would incorrectly report that failure as a pass.
+        $markerFound = Select-String -LiteralPath $logPath -Pattern '"smoke_test_marker"\s*:\s*"SMARTNET_OPENAI_SMOKE_TEST_PASS"' -Quiet
         $passed = ($exitCode -eq 0 -and $markerFound)
         $SmokeResults += [pscustomobject]@{
             workflow = $source.name
