@@ -2,38 +2,65 @@
 
 ## Agent inventory
 
-Thirteen n8n workflows are provided in `automation/n8n/workflows`. Their registry is `agent-registry.json`; controls are in `approval-policy.json`.
+Thirteen workflows are provided in `automation/n8n/workflows`. Each source workflow includes AI Agent v3.1, OpenAI Chat Model v1.2 using `gpt-6-luna`, an Arabic system message, minimized context, and a deterministic result finalizer. The registry is `agent-registry.json`; controls are in `approval-policy.json`.
 
-## Import
+## Local update and testing
 
-1. Open the local n8n editor.
-2. Import each JSON file from the workflows directory.
-3. Keep all workflows inactive while configuring authentication and local host addresses.
-4. Configure webhook authentication on every externally reachable workflow.
-5. Start with 01 (GitHub inventory), then 06 (FastAPI health), and 11 (safe health smoke test).
-6. The supervisor returns a workflow target path; it does not invoke workflows automatically. Activate and connect the dispatcher only after webhook authentication is configured.
+After the user has already imported the 13 workflows, do not run the first-time importer again. Use `scripts/Update-And-Test-SmartNetAgents.ps1` on the same Windows account/database:
+- backs up all 31 local workflows;
+- reads only credential names/IDs from the encrypted credentials export (never decrypted);
+- binds the local OpenAI credential and the dedicated `SmartNet Agents Header Auth` credential;
+- updates the existing 13 workflow IDs in place;
+- re-exports to verify nodes, connections, credentials, and inactive state;
+- runs a Manual Trigger OpenAI smoke test for each agent;
+- leaves workflows unpublished by default.
 
-## Runtime limitations
+See `WINDOWS_INSTALL_AR.md` for local development publication and Backend bridge setup.
 
-- 01 reads GitHub's public repository tree on the main branch.
-- 02 checks repository file paths only; it is not a content secret scanner or package vulnerability scanner.
-- 06 and 11 check only `GET /api/health`; they do not prove database or router health.
-- 03, 04, 05, 07, 08, 09, 10, and 12 are guardrails/review logic. They do not mutate production state.
-- No workflow is connected to local n8n during repository authoring. Import and runtime validation on the user's PC remain a separate step.
+## Backend bridge
+
+The optional FastAPI bridge is disabled by default (`N8N_ENABLED=false`). It exposes admin-only:
+- `GET /api/v1/automation/agents`
+- `POST /api/v1/automation/agents/{agent_id}/invoke`
+- `POST /api/v1/automation/dispatch`
+
+The dispatch endpoint asks Supervisor 00 to classify the task, validates its target against a static allow-list, then calls only that fixed webhook path. The Backend never accepts a caller-supplied URL. Production requires an HTTPS n8n origin; the local development origin may be loopback HTTP only. The same `X-SmartNet-Agent-Key` value must be configured in n8n Header Auth and protected Backend environment variables.
+
+## Runtime scope
+
+- 00 classifies and returns a target path; the Backend bridge performs allow-listed dispatch.
+- 01 reads the public GitHub repository tree on main; it is not a source-code review.
+- 02 checks file path hygiene only; it is not content secret scanning or a dependency audit.
+- 06 and 11 call only GET /api/health on webhook execution. Their manual smoke test uses a local fixture to test the model chain and does not prove Backend availability.
+- 03, 04, 05, 07, 08, 09, 10, and 12 are input-driven guardrails/review logic. They do not mutate production state.
+- AI outputs are advisory and cannot override deterministic decisions.
+- No AI tools are connected. No RouterOS, database-write, payment, ledger, or deployment tools are exposed to the model.
+
+## Data minimization
+
+Backend minimizes payloads before calling n8n:
+- 01/02/06/11 receive only a request ID.
+- 07 receives allow-listed aggregate numeric metrics only; arbitrary observations and identifiers are dropped.
+- 08 receives field-presence flags and missing-field names, never payment references, amounts, currencies, or provider identifiers.
+- 09 compares expected/received data in Backend memory, then sends mismatch codes and presence flags only.
+- 10 receives the action and target/reason presence flags, never target/reason text.
+- 03, 04, 05, and 12 receive allow-listed roles/permissions or boolean checklist values.
+- 00 receives only task name and request ID.
+
+The Backend audit log records request ID, agent ID, and status only; it does not store request payloads or secrets.
 
 ## Local endpoints
 
-The default FastAPI URL used by health workflows is `http://127.0.0.1:8000`. If n8n runs in a container, `127.0.0.1` refers to that container, not the Windows host. Use the host address reachable from n8n in that case.
+The default FastAPI URL used by health workflows is `http://127.0.0.1:8000`. The default local n8n origin is `http://127.0.0.1:5678`. Both must be reachable from the Backend process. If either service runs in a container or a different host, localhost refers to that process/machine; configure the reachable private hostname instead. Production uses HTTPS.
 
 ## Security
 
-- Never place GitHub, Telegram, OpenAI, MikroTik, payment, JWT, or webhook secrets in workflow JSON or Git.
-- Store secrets in n8n Credentials or the local secret environment.
-- Keep production workflows inactive until webhook auth, TLS/private network exposure, and role boundaries have been tested.
-- All RouterOS mutations, payment approval, account activation, database restore and production deployment require durable backend approval and audit.
+- All 13 Webhook Trigger nodes require Header Auth in source.
+- Credential IDs are bound locally by the updater and never committed to Git.
+- Do not publish Webhooks until tests pass, caller integration is configured, and TLS/private-network exposure is checked.
+- RouterOS mutations, payment approval, account activation, database restore, and production deployment require durable Backend approval and audit.
 - A receipt image is not proof of settlement.
 
+## CLI compatibility
 
-## Windows local import
-
-See [WINDOWS_INSTALL_AR.md](./WINDOWS_INSTALL_AR.md) for the guarded Windows import process. The PowerShell installer backs up the current n8n workflow set, checks for duplicate SmartNet names, and imports the 13 workflows inactive. It never publishes workflows or writes credentials. Webhook authentication and local runtime checks are required before publishing.
+The local updater is restricted to n8n 2.49.5. It uses export/import to back up and update existing workflow IDs, then executes manual smoke tests. It does not automatically publish workflows unless the explicit publication switches and endpoint checks pass.

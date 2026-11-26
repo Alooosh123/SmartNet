@@ -20,3 +20,6 @@ def test_fastapi_application_imports_and_exposes_core_routes():
     assert "/api/v1/wallet-monitor/me/payment-intents" in paths
     assert "/api/v1/wallet-monitor/admin/transactions" in paths
     assert "/api/v1/wallet-monitor/admin/transactions/{transaction_id}/verify" in paths
+    assert "/api/v1/automation/agents" in paths
+    assert "/api/v1/automation/agents/{agent_id}/invoke" in paths
+    assert "/api/v1/automation/dispatch" in paths

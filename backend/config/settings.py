@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import urlsplit
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
@@ -56,6 +57,13 @@ class Settings(BaseSettings):
     NETWORK_ALERT_CPU_THRESHOLD: int = 85
     NETWORK_ALERT_FREE_MEMORY_MB: int = 32
 
+    # Optional guarded outbound bridge from the admin API to local/private n8n webhooks.
+    N8N_ENABLED: bool = False
+    N8N_BASE_URL: Optional[str] = None
+    N8N_WEBHOOK_AUTH_HEADER: str = "X-SmartNet-Agent-Key"
+    N8N_WEBHOOK_AUTH_VALUE: Optional[str] = None
+    N8N_TIMEOUT_SECONDS: int = 12
+
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o-mini"
     TELEGRAM_BOT_TOKEN: Optional[str] = None
@@ -88,6 +96,33 @@ class Settings(BaseSettings):
             )
         if self.WALLET_DEVICE_CLOCK_SKEW_SECONDS < 30 or self.WALLET_DEVICE_CLOCK_SKEW_SECONDS > 1800:
             raise ValueError("WALLET_DEVICE_CLOCK_SKEW_SECONDS must be between 30 and 1800.")
+        if not 2 <= self.N8N_TIMEOUT_SECONDS <= 60:
+            raise ValueError("N8N_TIMEOUT_SECONDS must be between 2 and 60.")
+        allowed_header_chars = "!#$%&'*+-.^_`|~"
+        if (
+            not self.N8N_WEBHOOK_AUTH_HEADER
+            or len(self.N8N_WEBHOOK_AUTH_HEADER) > 128
+            or any(not ch.isascii() or not (ch.isalnum() or ch in allowed_header_chars) for ch in self.N8N_WEBHOOK_AUTH_HEADER)
+        ):
+            raise ValueError("N8N_WEBHOOK_AUTH_HEADER must be a valid HTTP header name.")
+        if self.N8N_ENABLED:
+            if not self.N8N_BASE_URL or not self.N8N_WEBHOOK_AUTH_VALUE:
+                raise ValueError("N8N_BASE_URL and N8N_WEBHOOK_AUTH_VALUE are required when N8N_ENABLED is true.")
+            if len(self.N8N_WEBHOOK_AUTH_VALUE) < 32:
+                raise ValueError("N8N_WEBHOOK_AUTH_VALUE must contain at least 32 characters.")
+            n8n_url = urlsplit(self.N8N_BASE_URL)
+            if (
+                n8n_url.scheme not in {"http", "https"}
+                or not n8n_url.hostname
+                or n8n_url.username
+                or n8n_url.password
+                or n8n_url.query
+                or n8n_url.fragment
+                or n8n_url.path not in {"", "/"}
+            ):
+                raise ValueError("N8N_BASE_URL must be a plain HTTP(S) origin without credentials, path, query or fragment.")
+            if self.ENVIRONMENT.lower() == "production" and n8n_url.scheme != "https":
+                raise ValueError("N8N_BASE_URL must use HTTPS in production.")
 
         if self.ENVIRONMENT.lower() == "production":
             insecure = {

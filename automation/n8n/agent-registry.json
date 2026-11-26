@@ -3,7 +3,7 @@
   "repository": "Alooosh123/SmartNet",
   "branch": "main",
   "locale": "ar-YE",
-  "workflow_contract": "POST JSON webhook; JSON response; all workflows inactive after import.",
+  "workflow_contract": "POST JSON webhook with local Header Auth credential binding; AI Agent + OpenAI Chat Model advisory; deterministic result remains authoritative; workflows are imported/updated unpublished by default.",
   "agents": [
     {
       "id": "00",
@@ -12,8 +12,13 @@
       "webhook_path": "/webhook/smartnet/agents/00-supervisor",
       "description": "Routes named tasks to agent webhook paths. Never executes privileged work.",
       "prompt_path": "prompts/00-supervisor.md",
-      "llm_status": "prompt_ready_not_connected",
-      "execution_mode": "deterministic_guardrail"
+      "llm_status": "nodes_wired_local_credential_binding_required",
+      "execution_mode": "deterministic_guardrail_with_llm_advisory",
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "01",
@@ -22,8 +27,13 @@
       "webhook_path": "/webhook/smartnet/agents/01-repository-auditor",
       "description": "Read-only GitHub tree inventory.",
       "prompt_path": "prompts/01-repository-auditor.md",
-      "llm_status": "prompt_ready_not_connected",
-      "execution_mode": "deterministic_guardrail"
+      "llm_status": "nodes_wired_local_credential_binding_required",
+      "execution_mode": "deterministic_guardrail_with_llm_advisory",
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "02",
@@ -32,8 +42,13 @@
       "webhook_path": "/webhook/smartnet/agents/02-security-auditor",
       "description": "Read-only path hygiene scan. Not a source secret scan.",
       "prompt_path": "prompts/02-security-auditor.md",
-      "llm_status": "prompt_ready_not_connected",
-      "execution_mode": "deterministic_guardrail"
+      "llm_status": "nodes_wired_local_credential_binding_required",
+      "execution_mode": "deterministic_guardrail_with_llm_advisory",
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "03",
@@ -42,8 +57,13 @@
       "webhook_path": "/webhook/smartnet/agents/03-rbac-reviewer",
       "description": "Reviews a supplied role-permission matrix.",
       "prompt_path": "prompts/03-rbac-reviewer.md",
-      "llm_status": "prompt_ready_not_connected",
-      "execution_mode": "deterministic_guardrail"
+      "llm_status": "nodes_wired_local_credential_binding_required",
+      "execution_mode": "deterministic_guardrail_with_llm_advisory",
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "04",
@@ -52,8 +72,13 @@
       "webhook_path": "/webhook/smartnet/agents/04-database-backup-reviewer",
       "description": "Checks operator-supplied backup and restore evidence.",
       "prompt_path": "prompts/04-database-backup-reviewer.md",
-      "llm_status": "prompt_ready_not_connected",
-      "execution_mode": "deterministic_guardrail"
+      "llm_status": "nodes_wired_local_credential_binding_required",
+      "execution_mode": "deterministic_guardrail_with_llm_advisory",
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "05",
@@ -62,8 +87,13 @@
       "webhook_path": "/webhook/smartnet/agents/05-mikrotik-test-gate",
       "description": "Validates isolated test prerequisites; never runs RouterOS commands.",
       "prompt_path": "prompts/05-mikrotik-test-gate.md",
-      "llm_status": "prompt_ready_not_connected",
-      "execution_mode": "deterministic_guardrail"
+      "llm_status": "nodes_wired_local_credential_binding_required",
+      "execution_mode": "deterministic_guardrail_with_llm_advisory",
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "06",
@@ -72,8 +102,13 @@
       "webhook_path": "/webhook/smartnet/agents/06-backend-health-monitor",
       "description": "GET /api/health only; does not test router/database.",
       "prompt_path": "prompts/06-network-monitor.md",
-      "llm_status": "prompt_ready_not_connected",
-      "execution_mode": "deterministic_guardrail"
+      "llm_status": "nodes_wired_local_credential_binding_required",
+      "execution_mode": "deterministic_guardrail_with_llm_advisory",
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "07",
@@ -82,8 +117,13 @@
       "webhook_path": "/webhook/smartnet/agents/07-network-diagnosis-advisor",
       "description": "Rule-based recommendations only; no RouterOS commands.",
       "prompt_path": "prompts/07-network-diagnosis.md",
-      "llm_status": "prompt_ready_not_connected",
-      "execution_mode": "deterministic_guardrail"
+      "llm_status": "nodes_wired_local_credential_binding_required",
+      "execution_mode": "deterministic_guardrail_with_llm_advisory",
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "08",
@@ -92,8 +132,13 @@
       "webhook_path": "/webhook/smartnet/agents/08-payment-intake-guard",
       "description": "Validates shape only; never confirms payment or activates account.",
       "prompt_path": "prompts/08-payment-intake.md",
-      "llm_status": "prompt_ready_not_connected",
-      "execution_mode": "deterministic_guardrail"
+      "llm_status": "nodes_wired_local_credential_binding_required",
+      "execution_mode": "deterministic_guardrail_with_llm_advisory",
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "09",
@@ -102,8 +147,13 @@
       "webhook_path": "/webhook/smartnet/agents/09-financial-reconciliation",
       "description": "Compares provided records; never writes the ledger.",
       "prompt_path": "prompts/09-financial-reconciliation.md",
-      "llm_status": "prompt_ready_not_connected",
-      "execution_mode": "deterministic_guardrail"
+      "llm_status": "nodes_wired_local_credential_binding_required",
+      "execution_mode": "deterministic_guardrail_with_llm_advisory",
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "10",
@@ -112,8 +162,13 @@
       "webhook_path": "/webhook/smartnet/agents/10-human-approval-gate",
       "description": "Captures approval request; does not execute action.",
       "prompt_path": "prompts/10-human-approval.md",
-      "llm_status": "prompt_ready_not_connected",
-      "execution_mode": "deterministic_guardrail"
+      "llm_status": "nodes_wired_local_credential_binding_required",
+      "execution_mode": "deterministic_guardrail_with_llm_advisory",
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "11",
@@ -122,8 +177,13 @@
       "webhook_path": "/webhook/smartnet/agents/11-qa-smoke-test",
       "description": "Safe GET health probe only; skips all mutating tests.",
       "prompt_path": "prompts/11-qa-engineer.md",
-      "llm_status": "prompt_ready_not_connected",
-      "execution_mode": "deterministic_guardrail"
+      "llm_status": "nodes_wired_local_credential_binding_required",
+      "execution_mode": "deterministic_guardrail_with_llm_advisory",
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     },
     {
       "id": "12",
@@ -132,9 +192,14 @@
       "webhook_path": "/webhook/smartnet/agents/12-release-preflight",
       "description": "Checks release evidence; never deploys.",
       "prompt_path": "prompts/12-release-preflight.md",
-      "llm_status": "prompt_ready_not_connected",
-      "execution_mode": "deterministic_guardrail"
+      "llm_status": "nodes_wired_local_credential_binding_required",
+      "execution_mode": "deterministic_guardrail_with_llm_advisory",
+      "credential_binding": "openAiApi and httpHeaderAuth references are injected locally by Update-And-Test-SmartNetAgents.ps1; no secret values are stored in Git",
+      "model": "gpt-6-luna",
+      "ai_agent_node_version": "3.1",
+      "chat_model_node_version": "1.2",
+      "webhook_authentication": "headerAuth"
     }
   ],
-  "prompt_contract": "Each agent has an Arabic system prompt in prompts/. Prompts are specifications for local AI Agent nodes; they are not active until model credentials and AI nodes are connected."
+  "prompt_contract": "Each workflow contains n8n AI Agent v3.1 and OpenAI Chat Model v1.2 using gpt-6-luna connected through ai_languageModel. Arabic system prompts are embedded. OpenAI and Header Auth credential IDs are omitted from Git and injected locally by Update-And-Test-SmartNetAgents.ps1. The Backend bridge minimizes sensitive fields before sending webhook payloads. The model is advisory only; deterministic Code nodes remain authoritative; no write tools are connected."
 }
