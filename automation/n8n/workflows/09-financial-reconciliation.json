@@ -1,1 +1,226 @@
-{"name":"SmartNet Agent 09 - Financial Reconciliation","nodes":[{"parameters":{"httpMethod":"POST","path":"smartnet/agents/09-financial-reconciliation","responseMode":"responseNode","options":{}},"id":"09-financial-reconciliation-webhook","name":"Webhook Trigger","type":"n8n-nodes-base.webhook","typeVersion":2.1,"position":[240,300],"webhookId":"09-financial-reconciliation-hook"},{"parameters":{"jsCode":"const x=$json.body??$json;const a=x.expected||{},b=x.received||{},issues=[];if(a.transaction_ref&&b.transaction_ref&&a.transaction_ref!==b.transaction_ref)issues.push('transaction_reference_mismatch');if(a.amount!=null&&b.amount!=null&&Number(a.amount)!==Number(b.amount))issues.push('amount_mismatch');if(a.currency&&b.currency&&String(a.currency).toUpperCase()!==String(b.currency).toUpperCase())issues.push('currency_mismatch');if(a.recipient&&b.recipient&&a.recipient!==b.recipient)issues.push('recipient_mismatch');return [{json:{agent:'09-financial-reconciliation',status:issues.length?'needs_finance_review':'candidate_match_not_final',issues,expected:a,received:b,finance_approval_required:true,ledger_updated:false,subscription_activated:false}}];"},"id":"09-financial-reconciliation-code","name":"Evaluate request","type":"n8n-nodes-base.code","typeVersion":2,"position":[500,300]},{"parameters":{"respondWith":"json","responseBody":"={{ $json }}","options":{"responseCode":200}},"id":"09-financial-reconciliation-response","name":"Respond to Webhook","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[760,300]}],"connections":{"Webhook Trigger":{"main":[[{"node":"Evaluate request","type":"main","index":0}]]},"Evaluate request":{"main":[[{"node":"Respond to Webhook","type":"main","index":0}]]}},"active":false,"settings":{"executionOrder":"v1"},"versionId":"09-financial-reconciliation-v1","meta":{"description":"Compares provided records; never writes the ledger.","templateCredsSetupCompleted":false},"tags":[]}
+{
+  "name": "SmartNet Agent 09 - Financial Reconciliation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smartnet/agents/09-financial-reconciliation",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "id": "09-financial-reconciliation-webhook",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "09-financial-reconciliation-hook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$json.body??$json;const a=x.expected||{},b=x.received||{},issues=[];if(a.transaction_ref&&b.transaction_ref&&a.transaction_ref!==b.transaction_ref)issues.push('transaction_reference_mismatch');if(a.amount!=null&&b.amount!=null&&Number(a.amount)!==Number(b.amount))issues.push('amount_mismatch');if(a.currency&&b.currency&&String(a.currency).toUpperCase()!==String(b.currency).toUpperCase())issues.push('currency_mismatch');if(a.recipient&&b.recipient&&a.recipient!==b.recipient)issues.push('recipient_mismatch');return [{json:{agent:'09-financial-reconciliation',status:issues.length?'needs_finance_review':'candidate_match_not_final',issues,expected:a,received:b,finance_approval_required:true,ledger_updated:false,subscription_activated:false}}];"
+      },
+      "id": "09-financial-reconciliation-code",
+      "name": "Evaluate request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "09-financial-reconciliation-response",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        760,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "09-manual-smoke-trigger",
+      "name": "Manual Trigger - Safe Smoke Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$json||{};const a=r.expected||{},b=r.received||{};const ai_context={agent:r.agent||'09-financial-reconciliation',status:r.status,issues:r.issues||[],expected_transaction_ref_present:!!a.transaction_ref,received_transaction_ref_present:!!b.transaction_ref,expected_amount_present:a.amount!==undefined&&a.amount!==null,received_amount_present:b.amount!==undefined&&b.amount!==null,expected_currency_present:!!a.currency,received_currency_present:!!b.currency,expected_recipient_present:!!a.recipient,received_recipient_present:!!b.recipient,finance_approval_required:true,ledger_updated:false,subscription_activated:false};return [{json:{ai_context}}];"
+      },
+      "id": "09-prepare-ai-context",
+      "name": "Prepare Minimized AI Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.ai_context) }}",
+        "hasOutputParser": false,
+        "needsFallback": false,
+        "options": {
+          "systemMessage": "# الوكيل 09 – مدقق المطابقة المالية\n\nأنت محلل مطابقة مالية. قارن كشف البنك أو المحفظة مع سجلات SmartNet المعتمدة، وأظهر الفروقات دون تعديل أي سجل مالي.\n\nطابق reference وamount وcurrency وrecipient وsettlement_status وtimestamps. صنّف النتيجة إلى matched أو amount_mismatch أو currency_mismatch أو duplicate_reference أو external_only أو internal_only أو pending. احسب المجاميع لكل عملة بشكل مستقل.\n\nاستخدم الكشف والسجلات للقراءة فقط. لا تكتب قيوداً ولا تغير حالة دفع ولا تفعّل اشتراكاً. احفظ بصمة SHA-256 للملف إذا كانت متاحة.\n\nكل فرق أو مرجع مكرر يذهب إلى مراجعة Finance. تطابق المرجع وحده ليس إثباتاً كافياً. أخرج JSON يتضمن matched وmismatches وexternal_only وinternal_only وtotals_by_currency.\n\nضوابط تنفيذ إضافية إلزامية:\n- حلّل فقط كائن JSON المصغّر الذي تستلمه في ai_context، ولا تطلب أو تخمّن بيانات حساسة محذوفة.\n- لا تستخدم أدوات خارجية ولا تنفذ أوامر أو تغييرات؛ لا توجد أدوات تنفيذ موصولة بك.\n- لا تغيّر الحالة الحتمية أو تستبدل قرار كود التحقق. اكتب رأياً تفسيرياً مساعداً فقط.\n- لا تدّع أن فحصاً أو اتصالاً أو اختباراً قد حدث ما لم يظهر في مدخلاتك دليل صريح.\n- عند نقص الدليل، قل ذلك بوضوح. أخرج JSON صحيحاً قدر الإمكان، دون Markdown fences.",
+          "maxIterations": 3,
+          "returnIntermediateSteps": false,
+          "enableStreaming": false,
+          "autoSaveHighlightedData": false
+        }
+      },
+      "id": "09-ai-agent",
+      "name": "AI Agent - Advisory",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1270,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "options": {
+          "temperature": 0.2,
+          "maxTokens": 900,
+          "timeout": 60000,
+          "maxRetries": 1
+        }
+      },
+      "id": "09-openai-chat-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1280,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const baseline = $('Evaluate request').first().json;\nconst content = (typeof $json.output === 'string' && $json.output.trim()) ? $json.output.trim() : null;\nconst failed = !content || Boolean($json.error);\nreturn [{ json: {\n  ...baseline,\n  ai_advisory: { provider: 'OpenAI', status: failed ? 'unavailable' : 'completed', content: content, note: failed ? 'تعذر الحصول على تحليل النموذج؛ تم الاحتفاظ بنتيجة التحقق الحتمية.' : 'هذه توصية تفسيرية فقط ولا تغيّر نتيجة التحقق الحتمية.' },\n  execution_authority: 'read_only_advisory',\n  side_effects_performed: false,\n} }];"
+      },
+      "id": "09-finalize-ai-advice",
+      "name": "Finalize AI Advisory",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1550,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Evaluate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger - Safe Smoke Test": {
+      "main": [
+        [
+          {
+            "node": "Evaluate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate request": {
+      "main": [
+        [
+          {
+            "node": "Prepare Minimized AI Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Minimized AI Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Advisory",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Advisory": {
+      "main": [
+        [
+          {
+            "node": "Finalize AI Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize AI Advisory": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "09-financial-reconciliation-n8n2495-ai-v1",
+  "meta": {
+    "description": "Compares provided records; never writes the ledger.. OpenAI AI Agent advisory attached; deterministic checks preserved; local Header Auth credential is bound by updater; inactive by default.",
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
