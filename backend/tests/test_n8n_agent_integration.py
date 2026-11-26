@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import json
 
 import httpx
 import pytest
@@ -46,7 +47,8 @@ async def test_n8n_client_posts_only_to_fixed_agent_webhook_and_uses_header_auth
     assert seen["method"] == "POST"
     assert seen["url"] == "http://127.0.0.1:5678/webhook/smartnet/agents/01-repository-auditor"
     assert seen["header"] == "x" * 40
-    assert "public-repository" in seen["body"]
+    assert json.loads(seen["body"]) == {"request_id": "test-123"}
+    assert "public-repository" not in seen["body"]
 
 
 @pytest.mark.asyncio
@@ -199,7 +201,7 @@ async def test_payment_intake_payload_is_redacted_before_n8n_execution_storage()
     seen = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        seen.update(request.json())
+        seen.update(json.loads(request.read().decode('utf-8')))
         return httpx.Response(200, json={"status": "pending_independent_verification"})
 
     await client.invoke_agent(
