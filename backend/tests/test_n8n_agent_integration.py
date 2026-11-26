@@ -232,7 +232,7 @@ async def test_financial_reconciliation_sends_only_match_flags_and_issue_codes()
     seen = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        seen.update(request.json())
+        seen.update(json.loads(request.read().decode('utf-8')))
         return httpx.Response(200, json={"status": "needs_finance_review"})
 
     await client.invoke_agent(
@@ -274,7 +274,7 @@ async def test_approval_target_and_reason_are_not_sent_to_n8n():
     seen = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        seen.update(request.json())
+        seen.update(json.loads(request.read().decode('utf-8')))
         return httpx.Response(200, json={"status": "awaiting_human_approval"})
 
     await client.invoke_agent(
@@ -301,7 +301,7 @@ async def test_network_and_health_agents_receive_only_allowlisted_aggregate_data
     seen = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        seen.update(request.json())
+        seen.update(json.loads(request.read().decode('utf-8')))
         return httpx.Response(200, json={"status": "ok"})
 
     await client.invoke_agent(
