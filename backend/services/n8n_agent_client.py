@@ -5,6 +5,7 @@ The model can only provide advice. This client exposes no arbitrary URL or tool 
 from __future__ import annotations
 
 import json
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -93,6 +94,110 @@ def _validate_payload(payload: dict[str, Any]) -> None:
         raise ValueError("Agent payload contains a reserved key.")
 
 
+def _present(value: Any) -> bool:
+    return value is not None and value != ""
+
+
+def _decimal_equal(left: Any, right: Any) -> bool:
+    try:
+        if isinstance(left, bool) or isinstance(right, bool):
+            return False
+        return Decimal(str(left)) == Decimal(str(right))
+    except (InvalidOperation, TypeError, ValueError):
+        return False
+
+
+def _sanitize_payload_for_agent(agent_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Drop sensitive data before n8n stores webhook execution input."""
+    request_id = payload.get("request_id")
+    if agent_id == "08":
+        payment = payload.get("payment") if isinstance(payload.get("payment"), dict) else payload
+        required = ("provider", "transaction_ref", "amount", "currency", "paid_at")
+        missing = [field for field in required if not _present(payment.get(field))]
+        return {
+            "request_id": request_id,
+            "agent": "08-payment-intake-guard",
+            "missing_fields": missing,
+            "provider_present": _present(payment.get("provider")),
+            "transaction_ref_present": _present(payment.get("transaction_ref")),
+            "amount_present": _present(payment.get("amount")),
+            "currency_present": _present(payment.get("currency")),
+            "paid_at_present": _present(payment.get("paid_at")),
+        }
+    if agent_id == "09":
+        expected = payload.get("expected") if isinstance(payload.get("expected"), dict) else {}
+        received = payload.get("received") if isinstance(payload.get("received"), dict) else {}
+        fields = ("transaction_ref", "amount", "currency", "recipient")
+        issues: list[str] = []
+        for field in fields:
+            left, right = expected.get(field), received.get(field)
+            if not (_present(left) and _present(right)):
+                continue
+            if field == "amount":
+                matches = _decimal_equal(left, right)
+            elif field == "currency":
+                matches = str(left).strip().upper() == str(right).strip().upper()
+            else:
+                matches = str(left).strip() == str(right).strip()
+            if not matches:
+                issues.append("transaction_reference_mismatch" if field == "transaction_ref" else f"{field}_mismatch")
+        return {
+            "request_id": request_id,
+            "agent": "09-financial-reconciliation",
+            "issues": issues,
+            "status": "needs_finance_review" if issues else "candidate_match_not_final",
+            "expected": {f"{field}_present": _present(expected.get(field)) for field in fields},
+            "received": {f"{field}_present": _present(received.get(field)) for field in fields},
+        }
+    if agent_id == "10":
+        return {
+            "request_id": request_id,
+            "agent": "10-human-approval-gate",
+            "action": payload.get("action"),
+            "target_present": _present(payload.get("target")),
+            "reason_present": _present(payload.get("reason")),
+        }
+    if agent_id == "07":
+        metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+        safe_metrics = {
+            key: value
+            for key, value in metrics.items()
+            if key in {"cpu_load_pct", "memory_free_pct", "active_users_delta"}
+            and isinstance(value, (int, float))
+            and not isinstance(value, bool)
+        }
+        return {"request_id": request_id, "metrics": safe_metrics, "observations": []}
+    if agent_id == "04":
+        checks = payload.get("checks") if isinstance(payload.get("checks"), dict) else {}
+        allowed = {"backup_created", "backup_checksum_verified", "restore_test_passed", "migration_status_reviewed", "secrets_externalized", "retention_policy_defined"}
+        engine = str(payload.get("database_engine") or "").strip().lower()
+        return {
+            "request_id": request_id,
+            "database_engine": engine if engine in {"sqlite", "mariadb", "mysql"} else "not_provided",
+            "checks": {key: checks.get(key) is True for key in allowed},
+        }
+    if agent_id == "05":
+        checks = payload.get("checks") if isinstance(payload.get("checks"), dict) else {}
+        allowed = {"isolated_test_router", "dedicated_read_only_account", "trusted_source_ip", "tls_or_private_tunnel", "demo_fallback_disabled_in_test", "backup_export_created"}
+        return {"request_id": request_id, "checks": {key: checks.get(key) is True for key in allowed}}
+    if agent_id == "12":
+        checks = payload.get("checks") if isinstance(payload.get("checks"), dict) else {}
+        required = {"secret_scan_passed", "dependency_audit_passed", "rbac_tests_passed", "db_backup_verified", "db_restore_test_passed", "mikrotik_isolated_test_passed", "payment_verification_tested", "approval_audit_tested", "qa_suite_passed", "rollback_plan_ready"}
+        return {"request_id": request_id, "checks": {key: checks.get(key) is True for key in required}}
+    if agent_id == "03":
+        allowed_roles = {"owner", "admin", "finance", "network_operator", "support", "client"}
+        allowed_permissions = {"view_network_status", "view_active_users", "generate_cards", "disconnect_user", "reboot_router", "verify_payment", "approve_payment", "manage_admins", "view_audit_logs"}
+        roles = payload.get("roles") if isinstance(payload.get("roles"), list) else None
+        permissions = payload.get("permissions") if isinstance(payload.get("permissions"), list) else []
+        safe_roles = [role for role in roles[:6] if isinstance(role, str) and role in allowed_roles] if roles else None
+        safe_permissions = [
+            {"role": item.get("role"), "permission": item.get("permission")}
+            for item in permissions[:64]
+            if isinstance(item, dict) and item.get("role") in allowed_roles and item.get("permission") in allowed_permissions
+        ]
+        return {"request_id": request_id, "roles": safe_roles, "permissions": safe_permissions}
+    return {key: value for key, value in payload.items() if key != "request_id"}
+
 def _build_webhook_url(agent_id: str, config: Any = settings) -> str:
     path = AGENT_WEBHOOK_PATHS.get(str(agent_id))
     if not path:
@@ -128,6 +233,7 @@ async def invoke_agent(
         raise ValueError("Unknown SmartNet agent ID.")
 
     _validate_payload(payload)
+    safe_payload = _sanitize_payload_for_agent(str(agent_id), payload)
     auth_header = getattr(config, "N8N_WEBHOOK_AUTH_HEADER", "")
     auth_value = getattr(config, "N8N_WEBHOOK_AUTH_VALUE", None)
     if not auth_header or not auth_value or len(auth_value) < 32:
@@ -147,7 +253,7 @@ async def invoke_agent(
             trust_env=False,
             transport=transport,
         ) as client:
-            response = await client.post(url, json=payload, headers=headers)
+            response = await client.post(url, json=safe_payload, headers=headers)
     except httpx.TimeoutException as exc:
         raise N8nAgentTransportError("Timed out while contacting the SmartNet n8n agent.") from exc
     except httpx.HTTPError as exc:
