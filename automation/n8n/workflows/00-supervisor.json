@@ -1,1 +1,226 @@
-{"name":"SmartNet Agent 00 - Supervisor","nodes":[{"parameters":{"httpMethod":"POST","path":"smartnet/agents/00-supervisor","responseMode":"responseNode","options":{}},"id":"00-supervisor-webhook","name":"Webhook Trigger","type":"n8n-nodes-base.webhook","typeVersion":2.1,"position":[240,300],"webhookId":"00-supervisor-hook"},{"parameters":{"jsCode":"const x=$json.body??$json;const routes={repository_audit:'01-repository-auditor',security_audit:'02-security-auditor',rbac_review:'03-rbac-reviewer',database_review:'04-database-backup-reviewer',mikrotik_gate:'05-mikrotik-test-gate',backend_health:'06-backend-health-monitor',network_diagnosis:'07-network-diagnosis-advisor',payment_intake:'08-payment-intake-guard',reconciliation:'09-financial-reconciliation',approval_request:'10-human-approval-gate',qa_smoke:'11-qa-smoke-test',release_preflight:'12-release-preflight'};const t=String(x.task||'');const blocked=['router_reboot','disconnect_user','firewall_change','payment_approval','subscription_activation','database_restore','production_deploy'];if(blocked.includes(t))return [{json:{status:'human_approval_required',task:t,execution_performed:false}}];if(!routes[t])return [{json:{status:'unsupported_task',task:t,allowed_tasks:Object.keys(routes)}}];return [{json:{status:'dispatch_ready',task:t,target_agent:routes[t],target_path:'/webhook/smartnet/agents/'+routes[t],request_id:x.request_id||'sn-'+Date.now(),note:'Activate and secure the target webhook before invoking it.'}}];"},"id":"00-supervisor-code","name":"Evaluate request","type":"n8n-nodes-base.code","typeVersion":2,"position":[500,300]},{"parameters":{"respondWith":"json","responseBody":"={{ $json }}","options":{"responseCode":200}},"id":"00-supervisor-response","name":"Respond to Webhook","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[760,300]}],"connections":{"Webhook Trigger":{"main":[[{"node":"Evaluate request","type":"main","index":0}]]},"Evaluate request":{"main":[[{"node":"Respond to Webhook","type":"main","index":0}]]}},"active":false,"settings":{"executionOrder":"v1"},"versionId":"00-supervisor-v1","meta":{"description":"Routes named tasks to agent webhook paths. Never executes privileged work.","templateCredsSetupCompleted":false},"tags":[]}
+{
+  "name": "SmartNet Agent 00 - Supervisor",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smartnet/agents/00-supervisor",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "id": "00-supervisor-webhook",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "00-supervisor-hook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$json.body??$json;const routes={repository_audit:'01-repository-auditor',security_audit:'02-security-auditor',rbac_review:'03-rbac-reviewer',database_review:'04-database-backup-reviewer',mikrotik_gate:'05-mikrotik-test-gate',backend_health:'06-backend-health-monitor',network_diagnosis:'07-network-diagnosis-advisor',payment_intake:'08-payment-intake-guard',reconciliation:'09-financial-reconciliation',approval_request:'10-human-approval-gate',qa_smoke:'11-qa-smoke-test',release_preflight:'12-release-preflight'};const t=String(x.task||'');const blocked=['router_reboot','disconnect_user','firewall_change','payment_approval','subscription_activation','database_restore','production_deploy'];if(blocked.includes(t))return [{json:{status:'human_approval_required',task:t,execution_performed:false}}];if(!routes[t])return [{json:{status:'unsupported_task',task:t,allowed_tasks:Object.keys(routes)}}];return [{json:{status:'dispatch_ready',task:t,target_agent:routes[t],target_path:'/webhook/smartnet/agents/'+routes[t],request_id:x.request_id||'sn-'+Date.now(),note:'Activate and secure the target webhook before invoking it.'}}];"
+      },
+      "id": "00-supervisor-code",
+      "name": "Evaluate request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "00-supervisor-response",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        760,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "00-manual-smoke-trigger",
+      "name": "Manual Trigger - Safe Smoke Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$json||{};const ai_context={agent:'00-supervisor',status:r.status||'unknown',task:r.task||null,target_agent:r.target_agent||null,target_path:r.target_path||null,allowed_tasks:r.allowed_tasks||[],execution_performed:false,approval_required:r.status==='human_approval_required'};return [{json:{ai_context}}];"
+      },
+      "id": "00-prepare-ai-context",
+      "name": "Prepare Minimized AI Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.ai_context) }}",
+        "hasOutputParser": false,
+        "needsFallback": false,
+        "options": {
+          "systemMessage": "# الوكيل 00 – المشرف العام\n\nأنت منسق فريق SmartNet. استقبل المهمة، صنفها، اختر الوكيل المختص من القائمة 01–12، ثم حدد المدخلات والاعتماديات ومعايير قبول النتيجة. لا تدّع أن أي مهمة نُفذت ما لم ترجع أداة التنفيذ نتيجة مؤكدة.\n\nاستخدم أسماء ومسارات الوكلاء من agent-registry.json فقط. أعد خطة قصيرة قابلة للتتبع، ولا تنشئ مسارات أو صلاحيات من عندك.\n\nعمليات الراوتر والمدفوعات وتفعيل الاشتراكات واستعادة قاعدة البيانات والنشر تُحوّل إلى موافقة بشرية محددة النطاق. لا توجهها إلى تنفيذ تلقائي.\n\nأخرج JSON فقط: agent_id، status، summary، target_agents، dependency_order، required_inputs، approval_required، limitations.\n\nضوابط تنفيذ إضافية إلزامية:\n- حلّل فقط كائن JSON المصغّر الذي تستلمه في ai_context، ولا تطلب أو تخمّن بيانات حساسة محذوفة.\n- لا تستخدم أدوات خارجية ولا تنفذ أوامر أو تغييرات؛ لا توجد أدوات تنفيذ موصولة بك.\n- لا تغيّر الحالة الحتمية أو تستبدل قرار كود التحقق. اكتب رأياً تفسيرياً مساعداً فقط.\n- لا تدّع أن فحصاً أو اتصالاً أو اختباراً قد حدث ما لم يظهر في مدخلاتك دليل صريح.\n- عند نقص الدليل، قل ذلك بوضوح. أخرج JSON صحيحاً قدر الإمكان، دون Markdown fences.",
+          "maxIterations": 3,
+          "returnIntermediateSteps": false,
+          "enableStreaming": false,
+          "autoSaveHighlightedData": false
+        }
+      },
+      "id": "00-ai-agent",
+      "name": "AI Agent - Advisory",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1270,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "options": {
+          "temperature": 0.2,
+          "maxTokens": 900,
+          "timeout": 60000,
+          "maxRetries": 1
+        }
+      },
+      "id": "00-openai-chat-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1280,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const baseline = $('Evaluate request').first().json;\nconst content = (typeof $json.output === 'string' && $json.output.trim()) ? $json.output.trim() : null;\nconst failed = !content || Boolean($json.error);\nreturn [{ json: {\n  ...baseline,\n  ai_advisory: {\n    provider: 'OpenAI',\n    status: failed ? 'unavailable' : 'completed',\n    content: content,\n    note: failed ? 'تعذر الحصول على تحليل النموذج؛ تم الاحتفاظ بنتيجة التحقق الحتمية.' : 'هذه توصية تفسيرية فقط ولا تغيّر نتيجة التحقق الحتمية.',\n  },\n  execution_authority: 'read_only_advisory',\n  side_effects_performed: false,\n} }];"
+      },
+      "id": "00-finalize-ai-advice",
+      "name": "Finalize AI Advisory",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1550,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Evaluate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger - Safe Smoke Test": {
+      "main": [
+        [
+          {
+            "node": "Evaluate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate request": {
+      "main": [
+        [
+          {
+            "node": "Prepare Minimized AI Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Minimized AI Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Advisory",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Advisory": {
+      "main": [
+        [
+          {
+            "node": "Finalize AI Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize AI Advisory": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "00-supervisor-n8n2495-ai-v1",
+  "meta": {
+    "description": "Routes named tasks to agent webhook paths. Never executes privileged work.. OpenAI AI Agent advisory attached; deterministic checks preserved; webhook uses local Header Auth credential bound by updater; inactive by default.",
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
