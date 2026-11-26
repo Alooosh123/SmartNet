@@ -121,6 +121,18 @@ def main() -> None:
         response = one_node(nodes, RESPONSE_TYPE, path)
         agent = one_node(nodes, AGENT_TYPE, path)
         model = one_node(nodes, MODEL_TYPE, path)
+        finalizer = next((node for node in nodes if node.get("name") == "Finalize AI Advisory"), None)
+        if not finalizer:
+            fail(f"{path.name}: deterministic advisory finalizer is missing")
+        finalizer_code = finalizer.get("parameters", {}).get("jsCode", "")
+        for required_marker in (
+            "Manual Trigger - Safe Smoke Test",
+            "SMARTNET_OPENAI_SMOKE_TEST_FAILED",
+            "SMARTNET_OPENAI_SMOKE_TEST_PASS",
+            "if (manualSmokeTest && failed)",
+        ):
+            if required_marker not in finalizer_code:
+                fail(f"{path.name}: real OpenAI smoke-test gate is missing {required_marker!r}")
 
         manual = [node for node in nodes if node.get("type") == "n8n-nodes-base.manualTrigger"]
         if len(manual) != 1:
@@ -191,6 +203,21 @@ def main() -> None:
         all_workflows[path.stem] = workflow
 
     registry = load_json(REGISTRY_PATH)
+    updater_path = ROOT / "automation" / "n8n" / "scripts" / "Update-And-Test-SmartNetAgents.ps1"
+    try:
+        updater_text = updater_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        fail(f"Local updater script is missing or unreadable: {exc}")
+    for required_updater_marker in (
+        "--rawOutput",
+        "SMARTNET_OPENAI_SMOKE_TEST_PASS",
+        "openai_response_marker_found",
+        "export:credentials --all",
+        "SmartNet Agents Header Auth",
+    ):
+        if required_updater_marker not in updater_text:
+            fail(f"Local updater is missing real-provider smoke-test requirement {required_updater_marker!r}")
+
     agents = registry.get("agents", [])
     if len(agents) != 13:
         fail(f"Expected 13 registered agents, found {len(agents)}")
