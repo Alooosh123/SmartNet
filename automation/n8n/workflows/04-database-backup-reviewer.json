@@ -1,1 +1,226 @@
-{"name":"SmartNet Agent 04 - Database & Backup Reviewer","nodes":[{"parameters":{"httpMethod":"POST","path":"smartnet/agents/04-database-backup-reviewer","responseMode":"responseNode","options":{}},"id":"04-database-backup-reviewer-webhook","name":"Webhook Trigger","type":"n8n-nodes-base.webhook","typeVersion":2.1,"position":[240,300],"webhookId":"04-database-backup-reviewer-hook"},{"parameters":{"jsCode":"const x=$json.body??$json;const c=x.checks||{};const required=['backup_created','backup_checksum_verified','restore_test_passed','migration_status_reviewed','secrets_externalized','retention_policy_defined'];const missing=required.filter(k=>c[k]!==true);return [{json:{agent:'04-database-backup-reviewer',status:missing.length?'blocked_or_incomplete':'operator_checks_confirmed',database_engine:x.database_engine||'not_provided',baseline:'SQLite via SQLAlchemy async; Alembic dependency exists and migration flow must be verified.',missing_checks:missing,never_do:['Do not restore over active DB without verified backup.','Do not infer backup success from file existence.','Do not commit database files or credentials.'],recommendation:'Keep SQLite for local single-user development; evaluate MariaDB for production only after concurrency and recovery requirements are measured.'}}];"},"id":"04-database-backup-reviewer-code","name":"Evaluate request","type":"n8n-nodes-base.code","typeVersion":2,"position":[500,300]},{"parameters":{"respondWith":"json","responseBody":"={{ $json }}","options":{"responseCode":200}},"id":"04-database-backup-reviewer-response","name":"Respond to Webhook","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[760,300]}],"connections":{"Webhook Trigger":{"main":[[{"node":"Evaluate request","type":"main","index":0}]]},"Evaluate request":{"main":[[{"node":"Respond to Webhook","type":"main","index":0}]]}},"active":false,"settings":{"executionOrder":"v1"},"versionId":"04-database-backup-reviewer-v1","meta":{"description":"Checks operator-supplied backup and restore evidence.","templateCredsSetupCompleted":false},"tags":[]}
+{
+  "name": "SmartNet Agent 04 - Database & Backup Reviewer",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smartnet/agents/04-database-backup-reviewer",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "id": "04-database-backup-reviewer-webhook",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "04-database-backup-reviewer-hook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$json.body??$json;const c=x.checks||{};const required=['backup_created','backup_checksum_verified','restore_test_passed','migration_status_reviewed','secrets_externalized','retention_policy_defined'];const missing=required.filter(k=>c[k]!==true);return [{json:{agent:'04-database-backup-reviewer',status:missing.length?'blocked_or_incomplete':'operator_checks_confirmed',database_engine:x.database_engine||'not_provided',baseline:'SQLite via SQLAlchemy async; Alembic dependency exists and migration flow must be verified.',missing_checks:missing,never_do:['Do not restore over active DB without verified backup.','Do not infer backup success from file existence.','Do not commit database files or credentials.'],recommendation:'Keep SQLite for local single-user development; evaluate MariaDB for production only after concurrency and recovery requirements are measured.'}}];"
+      },
+      "id": "04-database-backup-reviewer-code",
+      "name": "Evaluate request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "04-database-backup-reviewer-response",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        760,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "04-manual-smoke-trigger",
+      "name": "Manual Trigger - Safe Smoke Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$json||{};const ai_context={agent:r.agent||'04-database-backup-reviewer',status:r.status,database_engine:r.database_engine||'not_provided',baseline:r.baseline,missing_checks:r.missing_checks||[],never_do:r.never_do||[],recommendation:r.recommendation};return [{json:{ai_context}}];"
+      },
+      "id": "04-prepare-ai-context",
+      "name": "Prepare Minimized AI Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.ai_context) }}",
+        "hasOutputParser": false,
+        "needsFallback": false,
+        "options": {
+          "systemMessage": "# الوكيل 04 – مراجع قاعدة البيانات والنسخ الاحتياطي\n\nأنت مسؤول سلامة البيانات والتعافي. راجع محرك قاعدة البيانات وإعداد SQLAlchemy وAlembic وحسابات التطبيق والترحيل والنسخ والاستعادة.\n\nتحقق من فصل حساب التطبيق عن حساب الترحيل والنسخ والاستعادة، ووجود checksum، ومدة الاحتفاظ، واختبار استعادة فعلي، وتوافق migrations، والقيود الفريدة والمعاملات الذرية. لا تعتبر وجود ملف دليلاً على نجاح النسخ.\n\nاستخدم قراءة الإعدادات ونتائج CI وسجلات الاختبار غير المتلف فقط. لا تنفذ حذفاً أو استعادة أو ترحيلاً على الإنتاج.\n\nأي استعادة إنتاجية تحتاج موافقة ونسخة احتياطية متحققة وخطة رجوع ونافذة صيانة. أخرج JSON يتضمن backup_evidence وrestore_evidence وmissing_controls وapproval_required.\n\nضوابط تنفيذ إضافية إلزامية:\n- حلّل فقط كائن JSON المصغّر الذي تستلمه في ai_context، ولا تطلب أو تخمّن بيانات حساسة محذوفة.\n- لا تستخدم أدوات خارجية ولا تنفذ أوامر أو تغييرات؛ لا توجد أدوات تنفيذ موصولة بك.\n- لا تغيّر الحالة الحتمية أو تستبدل قرار كود التحقق. اكتب رأياً تفسيرياً مساعداً فقط.\n- لا تدّع أن فحصاً أو اتصالاً أو اختباراً قد حدث ما لم يظهر في مدخلاتك دليل صريح.\n- عند نقص الدليل، قل ذلك بوضوح. أخرج JSON صحيحاً قدر الإمكان، دون Markdown fences.",
+          "maxIterations": 3,
+          "returnIntermediateSteps": false,
+          "enableStreaming": false,
+          "autoSaveHighlightedData": false
+        }
+      },
+      "id": "04-ai-agent",
+      "name": "AI Agent - Advisory",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1270,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "options": {
+          "temperature": 0.2,
+          "maxTokens": 900,
+          "timeout": 60000,
+          "maxRetries": 1
+        }
+      },
+      "id": "04-openai-chat-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1280,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const baseline = $('Evaluate request').first().json;\nconst content = (typeof $json.output === 'string' && $json.output.trim()) ? $json.output.trim() : null;\nconst failed = !content || Boolean($json.error);\nreturn [{ json: {\n  ...baseline,\n  ai_advisory: {\n    provider: 'OpenAI',\n    status: failed ? 'unavailable' : 'completed',\n    content: content,\n    note: failed ? 'تعذر الحصول على تحليل النموذج؛ تم الاحتفاظ بنتيجة التحقق الحتمية.' : 'هذه توصية تفسيرية فقط ولا تغيّر نتيجة التحقق الحتمية.',\n  },\n  execution_authority: 'read_only_advisory',\n  side_effects_performed: false,\n} }];"
+      },
+      "id": "04-finalize-ai-advice",
+      "name": "Finalize AI Advisory",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1550,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Evaluate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger - Safe Smoke Test": {
+      "main": [
+        [
+          {
+            "node": "Evaluate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate request": {
+      "main": [
+        [
+          {
+            "node": "Prepare Minimized AI Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Minimized AI Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Advisory",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Advisory": {
+      "main": [
+        [
+          {
+            "node": "Finalize AI Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize AI Advisory": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "04-database-backup-reviewer-n8n2495-ai-v1",
+  "meta": {
+    "description": "Checks operator-supplied backup and restore evidence.. OpenAI AI Agent advisory attached; deterministic checks preserved; webhook uses local Header Auth credential bound by updater; inactive by default.",
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
