@@ -5,6 +5,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ExpectedVersion = "2.49.5"
+$ExpectedExistingWorkflowCount = 31
 $AgentFiles = @(
     "00-supervisor.json",
     "01-repository-auditor.json",
@@ -128,8 +129,8 @@ try {
     Write-Host "[1/7] Backing up all existing workflow definitions..." -ForegroundColor Cyan
     Invoke-N8n @("export:workflow", "--all", "--separate", "--output=$BackupWorkflows")
     $BackupFiles = @(Get-ChildItem -LiteralPath $BackupWorkflows -Filter "*.json" -File)
-    if ($BackupFiles.Count -lt 13) {
-        throw "Workflow backup is incomplete ($($BackupFiles.Count) files). No workflows were updated."
+    if ($BackupFiles.Count -ne $ExpectedExistingWorkflowCount) {
+        throw "Expected $ExpectedExistingWorkflowCount local workflows from the latest audit, but exported $($BackupFiles.Count). This may be a different n8n database/account. No workflows were updated."
     }
 
     $LocalByName = @{}
@@ -171,16 +172,10 @@ try {
     })
     $OpenAiCredential = Select-Credential -Candidates $OpenAiCandidates -Label "OpenAI API"
 
-    $HeaderCredential = $null
-    if ($HeaderRefs.Count -gt 0) {
-        $headerGroup = $HeaderRefs | Group-Object id | Sort-Object Count -Descending | Select-Object -First 1
-        $HeaderCredential = $headerGroup.Group[0]
-    } else {
-        $HeaderCandidates = @($CredentialRecords | Where-Object { $_.type -eq "httpHeaderAuth" } | ForEach-Object {
-            [pscustomobject]@{ id = [string]$_.id; name = [string]$_.name }
-        })
-        $HeaderCredential = Select-Credential -Candidates $HeaderCandidates -Label "Webhook Header Auth"
-    }
+    $HeaderCandidates = @($CredentialRecords | Where-Object { $_.type -eq "httpHeaderAuth" } | ForEach-Object {
+        [pscustomobject]@{ id = [string]$_.id; name = [string]$_.name }
+    })
+    $HeaderCredential = Select-Credential -Candidates $HeaderCandidates -Label "Webhook Header Auth"
     if (-not $OpenAiCredential.id -or -not $HeaderCredential.id) {
         throw "Local credential metadata is incomplete. No workflows were updated."
     }
@@ -302,7 +297,10 @@ try {
     Write-Host "[7/7] Publication decision..." -ForegroundColor Cyan
     if ($PublishAfterSmokeTests) {
         $httpsConfigured = (($env:WEBHOOK_URL -like "https://*") -or ($env:N8N_PROTOCOL -eq "https"))
-        if (-not $httpsConfigured) {
+        $explicitPublishGate = ($env:SMARTNET_ALLOW_WEBHOOK_PUBLISH -eq "YES")
+        if (-not $explicitPublishGate) {
+            Write-Warning "Publication skipped: set SMARTNET_ALLOW_WEBHOOK_PUBLISH=YES only after manually verifying caller integration, HTTPS/TLS, reverse proxy, firewall, and the shared Header Auth secret. Workflows remain unpublished."
+        } elseif (-not $httpsConfigured) {
             Write-Warning "Publication skipped: WEBHOOK_URL must start with https:// or N8N_PROTOCOL must be https. Workflows remain unpublished."
         } elseif (-not $allSmokePassed) {
             Write-Warning "Publication skipped: one or more local smoke tests failed. Workflows remain unpublished."
@@ -342,7 +340,7 @@ try {
         smoke_tests = $SmokeResults
         all_smoke_tests_passed = $allSmokePassed
         published_count = $Published.Count
-        all_workflows_left_unpublished_unless_https_and_tests_passed = $true
+        publication_attempted_only_with_explicit_publish_gate_https_and_all_tests_passed = $true
         backup_directory = $BackupRoot
         smoke_log_directory = $SmokeLogs
         note = "AI Agent output is advisory only. Deterministic checks remain authoritative. No router, payment, ledger, customer account, or production database mutation tools are connected."
