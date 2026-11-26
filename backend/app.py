@@ -19,7 +19,7 @@ from database import models
 from services.auth_service import auth_service
 from services.subscription_agent import subscription_agent_loop
 from services.network_observer import network_observer_loop
-from api.routes import auth, mikrotik, cards, client, wallet_monitor
+from api.routes import auth, mikrotik, cards, client, wallet_monitor, automation
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +202,10 @@ def _rate_limit_policy(method: str, path: str):
         return ("wallet-device-events", 60, 60)
     if path == "/api/v1/wallet-monitor/device/heartbeat":
         return ("wallet-device-heartbeat", 12, 60)
+    if path == "/api/v1/automation/dispatch":
+        return ("n8n-agent-dispatch", 5, 60)
+    if len(parts) == 6 and parts[:4] == ["api", "v1", "automation", "agents"] and parts[5] == "invoke":
+        return ("n8n-agent-direct-invoke", 5, 60)
     if (
         len(parts) == 7
         and parts[:5] == ["api", "v1", "wallet-monitor", "admin", "transactions"]
@@ -258,6 +262,7 @@ app.include_router(mikrotik.router)
 app.include_router(cards.router)
 app.include_router(client.router)
 app.include_router(wallet_monitor.router)
+app.include_router(automation.router)
 
 
 @app.get("/")
