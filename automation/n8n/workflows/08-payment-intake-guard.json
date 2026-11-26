@@ -1,1 +1,226 @@
-{"name":"SmartNet Agent 08 - Payment Intake Guard","nodes":[{"parameters":{"httpMethod":"POST","path":"smartnet/agents/08-payment-intake-guard","responseMode":"responseNode","options":{}},"id":"08-payment-intake-guard-webhook","name":"Webhook Trigger","type":"n8n-nodes-base.webhook","typeVersion":2.1,"position":[240,300],"webhookId":"08-payment-intake-guard-hook"},{"parameters":{"jsCode":"const x=$json.body??$json;const p=x.payment||x;const required=['provider','transaction_ref','amount','currency','paid_at'];const missing=required.filter(k=>p[k]===undefined||p[k]===null||p[k]==='');return [{json:{agent:'08-payment-intake-guard',status:missing.length?'rejected_incomplete':'pending_independent_verification',missing_fields:missing,transaction_ref_present:!!p.transaction_ref,amount:p.amount??null,currency:p.currency??null,verification:['Authenticate provider signature or query trusted provider API.','Check reference uniqueness.','Match amount, currency and recipient.','Require finance approval for manual evidence.'],subscription_activated:false,receipt_image_alone_is_payment_proof:false}}];"},"id":"08-payment-intake-guard-code","name":"Evaluate request","type":"n8n-nodes-base.code","typeVersion":2,"position":[500,300]},{"parameters":{"respondWith":"json","responseBody":"={{ $json }}","options":{"responseCode":200}},"id":"08-payment-intake-guard-response","name":"Respond to Webhook","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[760,300]}],"connections":{"Webhook Trigger":{"main":[[{"node":"Evaluate request","type":"main","index":0}]]},"Evaluate request":{"main":[[{"node":"Respond to Webhook","type":"main","index":0}]]}},"active":false,"settings":{"executionOrder":"v1"},"versionId":"08-payment-intake-guard-v1","meta":{"description":"Validates shape only; never confirms payment or activates account.","templateCredsSetupCompleted":false},"tags":[]}
+{
+  "name": "SmartNet Agent 08 - Payment Intake Guard",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smartnet/agents/08-payment-intake-guard",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "id": "08-payment-intake-guard-webhook",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "08-payment-intake-guard-hook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$json.body??$json;const p=x.payment||x;const required=['provider','transaction_ref','amount','currency','paid_at'];const missing=required.filter(k=>p[k]===undefined||p[k]===null||p[k]==='');return [{json:{agent:'08-payment-intake-guard',status:missing.length?'rejected_incomplete':'pending_independent_verification',missing_fields:missing,transaction_ref_present:!!p.transaction_ref,amount:p.amount??null,currency:p.currency??null,verification:['Authenticate provider signature or query trusted provider API.','Check reference uniqueness.','Match amount, currency and recipient.','Require finance approval for manual evidence.'],subscription_activated:false,receipt_image_alone_is_payment_proof:false}}];"
+      },
+      "id": "08-payment-intake-guard-code",
+      "name": "Evaluate request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "08-payment-intake-guard-response",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        760,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "08-manual-smoke-trigger",
+      "name": "Manual Trigger - Safe Smoke Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$json||{};const ai_context={agent:r.agent||'08-payment-intake-guard',status:r.status,missing_fields:r.missing_fields||[],transaction_ref_present:r.transaction_ref_present===true,amount_present:r.amount!==undefined&&r.amount!==null,currency_present:!!r.currency,verification:r.verification||[],subscription_activated:false,receipt_image_alone_is_payment_proof:false};return [{json:{ai_context}}];"
+      },
+      "id": "08-prepare-ai-context",
+      "name": "Prepare Minimized AI Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.ai_context) }}",
+        "hasOutputParser": false,
+        "needsFallback": false,
+        "options": {
+          "systemMessage": "# الوكيل 08 – حارس استقبال المدفوعات\n\nأنت مدقق أولي لبيانات الدفع والاشتراكات. اكشف نقص البيانات والتكرار والتعارض، ثم حوّل الحالة إلى تحقق مالي موثوق. لست بوابة دفع ولا صاحب قرار اعتماد.\n\nتحقق من provider وevent_id وtransaction_ref وamount وcurrency وrecipient وsettlement_status وpaid_at وregistration_id وتوقيع المزود أو نتيجة استعلام موثوق من الخادم إلى الخادم. افحص منع التكرار ومطابقة السعر والعملة والمستفيد.\n\nصورة الإيصال ملف داعم وليست إثبات تسوية. لا تغير حالة paid أو processed، ولا تنشئ حساباً أو تمدد اشتراكاً أو رصيداً.\n\nفي الدفع اليدوي أرسل الطلب إلى Finance لمراجعة المرجع والمبلغ والعملة وتسجيل المراجع وملاحظته. التفعيل الإداري عملية مستقلة. أخرج JSON يتضمن missing_fields وverification_status وduplicate_check وfinance_review_required.\n\nضوابط تنفيذ إضافية إلزامية:\n- حلّل فقط كائن JSON المصغّر الذي تستلمه في ai_context، ولا تطلب أو تخمّن بيانات حساسة محذوفة.\n- لا تستخدم أدوات خارجية ولا تنفذ أوامر أو تغييرات؛ لا توجد أدوات تنفيذ موصولة بك.\n- لا تغيّر الحالة الحتمية أو تستبدل قرار كود التحقق. اكتب رأياً تفسيرياً مساعداً فقط.\n- لا تدّع أن فحصاً أو اتصالاً أو اختباراً قد حدث ما لم يظهر في مدخلاتك دليل صريح.\n- عند نقص الدليل، قل ذلك بوضوح. أخرج JSON صحيحاً قدر الإمكان، دون Markdown fences.",
+          "maxIterations": 3,
+          "returnIntermediateSteps": false,
+          "enableStreaming": false,
+          "autoSaveHighlightedData": false
+        }
+      },
+      "id": "08-ai-agent",
+      "name": "AI Agent - Advisory",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1270,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "options": {
+          "temperature": 0.2,
+          "maxTokens": 900,
+          "timeout": 60000,
+          "maxRetries": 1
+        }
+      },
+      "id": "08-openai-chat-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1280,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const baseline = $('Evaluate request').first().json;\nconst content = (typeof $json.output === 'string' && $json.output.trim()) ? $json.output.trim() : null;\nconst failed = !content || Boolean($json.error);\nreturn [{ json: {\n  ...baseline,\n  ai_advisory: { provider: 'OpenAI', status: failed ? 'unavailable' : 'completed', content: content, note: failed ? 'تعذر الحصول على تحليل النموذج؛ تم الاحتفاظ بنتيجة التحقق الحتمية.' : 'هذه توصية تفسيرية فقط ولا تغيّر نتيجة التحقق الحتمية.' },\n  execution_authority: 'read_only_advisory',\n  side_effects_performed: false,\n} }];"
+      },
+      "id": "08-finalize-ai-advice",
+      "name": "Finalize AI Advisory",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1550,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Evaluate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger - Safe Smoke Test": {
+      "main": [
+        [
+          {
+            "node": "Evaluate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate request": {
+      "main": [
+        [
+          {
+            "node": "Prepare Minimized AI Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Minimized AI Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Advisory",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Advisory": {
+      "main": [
+        [
+          {
+            "node": "Finalize AI Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize AI Advisory": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "08-payment-intake-guard-n8n2495-ai-v1",
+  "meta": {
+    "description": "Validates shape only; never confirms payment or activates account.. OpenAI AI Agent advisory attached; deterministic checks preserved; local Header Auth credential is bound by updater; inactive by default.",
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
