@@ -192,3 +192,138 @@ def test_dispatch_payload_rejects_dispatcher_controlled_fields_and_large_payload
 
     with pytest.raises(ValueError, match="16 KiB"):
         AgentInvokeRequest(payload={"data": "x" * 17_000})
+
+
+@pytest.mark.asyncio
+async def test_payment_intake_payload_is_redacted_before_n8n_execution_storage():
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(request.json())
+        return httpx.Response(200, json={"status": "pending_independent_verification"})
+
+    await client.invoke_agent(
+        "08",
+        {
+            "request_id": "safe-payment-test",
+            "provider": "wallet-secret-name",
+            "transaction_ref": "TX-PRIVATE-987654",
+            "amount": "123.45",
+            "currency": "YER",
+            "paid_at": "2026-11-26T12:00:00Z",
+        },
+        config=n8n_config(),
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert seen["transaction_ref_present"] is True
+    assert seen["amount_present"] is True
+    assert seen["currency_present"] is True
+    assert "TX-PRIVATE-987654" not in str(seen)
+    assert "123.45" not in str(seen)
+    assert "YER" not in str(seen)
+    assert "wallet-secret-name" not in str(seen)
+
+
+@pytest.mark.asyncio
+async def test_financial_reconciliation_sends_only_match_flags_and_issue_codes():
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(request.json())
+        return httpx.Response(200, json={"status": "needs_finance_review"})
+
+    await client.invoke_agent(
+        "09",
+        {
+            "request_id": "safe-reconciliation-test",
+            "expected": {
+                "transaction_ref": "EXPECTED-PRIVATE-001",
+                "amount": "100.00",
+                "currency": "YER",
+                "recipient": "PRIVATE-ACCOUNT-01",
+            },
+            "received": {
+                "transaction_ref": "RECEIVED-PRIVATE-002",
+                "amount": "110.00",
+                "currency": "SAR",
+                "recipient": "PRIVATE-ACCOUNT-02",
+            },
+        },
+        config=n8n_config(),
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert seen["issues"] == [
+        "transaction_reference_mismatch",
+        "amount_mismatch",
+        "currency_mismatch",
+        "recipient_mismatch",
+    ]
+    serialized = str(seen)
+    for sensitive in ("EXPECTED-PRIVATE-001", "RECEIVED-PRIVATE-002", "100.00", "110.00", "YER", "SAR", "PRIVATE-ACCOUNT-01"):
+        assert sensitive not in serialized
+    assert seen["expected"]["amount_present"] is True
+    assert seen["received"]["recipient_present"] is True
+
+
+@pytest.mark.asyncio
+async def test_approval_target_and_reason_are_not_sent_to_n8n():
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(request.json())
+        return httpx.Response(200, json={"status": "awaiting_human_approval"})
+
+    await client.invoke_agent(
+        "10",
+        {
+            "request_id": "safe-approval-test",
+            "action": "disconnect_user",
+            "target": "private-subscriber-username",
+            "reason": "Customer-identifying private incident details",
+        },
+        config=n8n_config(),
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert seen["action"] == "disconnect_user"
+    assert seen["target_present"] is True
+    assert seen["reason_present"] is True
+    assert "private-subscriber-username" not in str(seen)
+    assert "private incident details" not in str(seen)
+
+
+@pytest.mark.asyncio
+async def test_network_and_health_agents_receive_only_allowlisted_aggregate_data():
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(request.json())
+        return httpx.Response(200, json={"status": "ok"})
+
+    await client.invoke_agent(
+        "07",
+        {
+            "request_id": "safe-network-test",
+            "metrics": {
+                "cpu_load_pct": 88,
+                "memory_free_pct": 8,
+                "active_users_delta": -4,
+                "router_password": "never-send-this",
+            },
+            "observations": ["private address 192.0.2.100 and subscriber name"],
+        },
+        config=n8n_config(),
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert seen["metrics"] == {
+        "cpu_load_pct": 88,
+        "memory_free_pct": 8,
+        "active_users_delta": -4,
+    }
+    assert seen["observations"] == []
+    assert "never-send-this" not in str(seen)
+    assert "192.0.2.100" not in str(seen)
+
