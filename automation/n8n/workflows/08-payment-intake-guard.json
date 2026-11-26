@@ -21,7 +21,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const x=$json.body??$json;const p=x.payment||x;const required=['provider','transaction_ref','amount','currency','paid_at'];const missing=required.filter(k=>p[k]===undefined||p[k]===null||p[k]==='');return [{json:{agent:'08-payment-intake-guard',status:missing.length?'rejected_incomplete':'pending_independent_verification',missing_fields:missing,transaction_ref_present:!!p.transaction_ref,amount:p.amount??null,currency:p.currency??null,verification:['Authenticate provider signature or query trusted provider API.','Check reference uniqueness.','Match amount, currency and recipient.','Require finance approval for manual evidence.'],subscription_activated:false,receipt_image_alone_is_payment_proof:false}}];"
+        "jsCode": "const x=$json.body??$json;const required=['provider','transaction_ref','amount','currency','paid_at'];const supplied=Array.isArray(x.missing_fields)?x.missing_fields:null;const missing=(supplied??required.filter(k=>x[k+'_present']!==true)).filter(k=>required.includes(k));return [{json:{agent:'08-payment-intake-guard',status:missing.length?'rejected_incomplete':'pending_independent_verification',missing_fields:missing,provider_present:x.provider_present===true,transaction_ref_present:x.transaction_ref_present===true,amount_present:x.amount_present===true,currency_present:x.currency_present===true,paid_at_present:x.paid_at_present===true,verification:['Authenticate provider signature or query trusted provider API.','Check reference uniqueness.','Match amount, currency and recipient using trusted server-side data.','Require finance approval for manual evidence.'],subscription_activated:false,receipt_image_alone_is_payment_proof:false}}];"
       },
       "id": "08-payment-intake-guard-code",
       "name": "Evaluate request",
@@ -62,7 +62,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r=$json||{};const ai_context={agent:r.agent||'08-payment-intake-guard',status:r.status,missing_fields:r.missing_fields||[],transaction_ref_present:r.transaction_ref_present===true,amount_present:r.amount!==undefined&&r.amount!==null,currency_present:!!r.currency,verification:r.verification||[],subscription_activated:false,receipt_image_alone_is_payment_proof:false};return [{json:{ai_context}}];"
+        "jsCode": "const r=$json||{};const ai_context={agent:r.agent||'08-payment-intake-guard',status:r.status,missing_fields:r.missing_fields||[],transaction_ref_present:r.transaction_ref_present===true,amount_present:r.amount_present===true,currency_present:r.currency_present===true,verification:r.verification||[],subscription_activated:false,receipt_image_alone_is_payment_proof:false};return [{json:{ai_context}}];"
       },
       "id": "08-prepare-ai-context",
       "name": "Prepare Minimized AI Context",
