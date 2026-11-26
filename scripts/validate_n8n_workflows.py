@@ -139,8 +139,8 @@ def main() -> None:
             fail(f"{path.name}: AI Agent must use n8n 2.49.5-compatible version 3.1")
         if model.get("typeVersion") != 1.2:
             fail(f"{path.name}: OpenAI Chat Model must use n8n 2.49.5-compatible version 1.2")
-        if model.get("parameters", {}).get("model", {}).get("value") != "gpt-5-mini":
-            fail(f"{path.name}: expected the selected baseline model gpt-5-mini")
+        if model.get("parameters", {}).get("model", {}).get("value") != "gpt-6-luna":
+            fail(f"{path.name}: expected the selected baseline model gpt-6-luna")
         if agent.get("parameters", {}).get("promptType") != "define":
             fail(f"{path.name}: AI Agent must use an explicitly defined prompt")
         agent_options = agent.get("parameters", {}).get("options", {})
