@@ -130,8 +130,8 @@
       "parameters": {
         "model": {
           "__rl": true,
-          "mode": "list",
-          "value": "gpt-5-mini"
+          "mode": "id",
+          "value": "gpt-6-luna"
         },
         "options": {
           "temperature": 0.2,
