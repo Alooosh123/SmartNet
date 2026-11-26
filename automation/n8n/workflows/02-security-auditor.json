@@ -1,1 +1,266 @@
-{"name":"SmartNet Agent 02 - Security Auditor","nodes":[{"parameters":{"httpMethod":"POST","path":"smartnet/agents/02-security-auditor","responseMode":"responseNode","options":{}},"id":"02-security-auditor-webhook","name":"Webhook Trigger","type":"n8n-nodes-base.webhook","typeVersion":2.1,"position":[240,300],"webhookId":"02-security-auditor-hook"},{"parameters":{"url":"https://api.github.com/repos/Alooosh123/SmartNet/git/trees/main?recursive=1","sendHeaders":true,"headerParameters":{"parameters":[{"name":"Accept","value":"application/vnd.github+json"}]},"options":{"response":{"response":{"neverError":true}}}},"id":"02-security-auditor-http","name":"Fetch repository tree","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[480,300]},{"parameters":{"jsCode":"const r=$('Fetch repository tree').first().json;const p=(r.tree||[]).filter(x=>x.type==='blob').map(x=>x.path);const secrets=p.filter(x=>/(^|\\/)(\\.env(?:\\..*)?|id_rsa|id_ed25519|.*\\.(pem|key)|credentials\\.json|secrets?\\.json)$/i.test(x));const runtime=p.filter(x=>/\\.pyc$|\\.db$|^backend\\/(uploads|static\\/pdfs)\\//i.test(x));return [{json:{agent:'02-security-auditor',status:'completed_path_hygiene_scan',possible_secret_paths:secrets,tracked_runtime_artifacts:runtime,source_review_targets:['backend/config/settings.py','backend/api/dependencies.py','backend/api/routes/auth.py','backend/api/routes/mikrotik.py','backend/services/mikrotik_api.py','backend/services/subscription_agent.py'],not_performed:['Secret scanning inside file contents','pip-audit','Bandit','RBAC runtime tests'],required_next_tools:['Gitleaks','pip-audit','Bandit','pytest'],warning:'Never print or copy secret values. Rotate any credential previously committed.',generated_at:new Date().toISOString()}}];"},"id":"02-security-auditor-code","name":"Evaluate request","type":"n8n-nodes-base.code","typeVersion":2,"position":[720,300]},{"parameters":{"respondWith":"json","responseBody":"={{ $json }}","options":{"responseCode":200}},"id":"02-security-auditor-response","name":"Respond to Webhook","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[980,300]}],"connections":{"Webhook Trigger":{"main":[[{"node":"Fetch repository tree","type":"main","index":0}]]},"Evaluate request":{"main":[[{"node":"Respond to Webhook","type":"main","index":0}]]},"Fetch repository tree":{"main":[[{"node":"Evaluate request","type":"main","index":0}]]}},"active":false,"settings":{"executionOrder":"v1"},"versionId":"02-security-auditor-v1","meta":{"description":"Read-only path hygiene scan. Not a source secret scan.","templateCredsSetupCompleted":false},"tags":[]}
+{
+  "name": "SmartNet Agent 02 - Security Auditor",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smartnet/agents/02-security-auditor",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "id": "02-security-auditor-webhook",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "02-security-auditor-hook"
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/Alooosh123/SmartNet/git/trees/main?recursive=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "02-security-auditor-http",
+      "name": "Fetch repository tree",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$('Fetch repository tree').first().json;const p=(r.tree||[]).filter(x=>x.type==='blob').map(x=>x.path);const secrets=p.filter(x=>/(^|\\/)(\\.env(?:\\..*)?|id_rsa|id_ed25519|.*\\.(pem|key)|credentials\\.json|secrets?\\.json)$/i.test(x));const runtime=p.filter(x=>/\\.pyc$|\\.db$|^backend\\/(uploads|static\\/pdfs)\\//i.test(x));return [{json:{agent:'02-security-auditor',status:'completed_path_hygiene_scan',possible_secret_paths:secrets,tracked_runtime_artifacts:runtime,source_review_targets:['backend/config/settings.py','backend/api/dependencies.py','backend/api/routes/auth.py','backend/api/routes/mikrotik.py','backend/services/mikrotik_api.py','backend/services/subscription_agent.py'],not_performed:['Secret scanning inside file contents','pip-audit','Bandit','RBAC runtime tests'],required_next_tools:['Gitleaks','pip-audit','Bandit','pytest'],warning:'Never print or copy secret values. Rotate any credential previously committed.',generated_at:new Date().toISOString()}}];"
+      },
+      "id": "02-security-auditor-code",
+      "name": "Evaluate request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "02-security-auditor-response",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "02-manual-smoke-trigger",
+      "name": "Manual Trigger - Safe Smoke Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$json||{};const ai_context={agent:r.agent||'02-security-auditor',status:r.status,possible_secret_paths:r.possible_secret_paths||[],tracked_runtime_artifacts:r.tracked_runtime_artifacts||[],source_review_targets:r.source_review_targets||[],not_performed:r.not_performed||[],required_next_tools:r.required_next_tools||[],warning:r.warning};return [{json:{ai_context}}];"
+      },
+      "id": "02-prepare-ai-context",
+      "name": "Prepare Minimized AI Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.ai_context) }}",
+        "hasOutputParser": false,
+        "needsFallback": false,
+        "options": {
+          "systemMessage": "# الوكيل 02 – مدقق الأمن والاعتماديات\n\nأنت مراجع أمن دفاعي لـSmartNet. افحص إعدادات البيئة والمصادقة والصلاحيات ورفع الملفات وWebhook وCORS والسجلات والاعتماديات وCI.\n\nصنف النتائج Critical/High/Medium/Low، واربط كل نتيجة بدليل وأثر وإصلاح متوافق. افحص القيم الافتراضية، إدارة مفاتيح الخدمة، حدود الطلبات، التحقق من المصدر، منع التكرار، وحماية معلومات العملاء.\n\nاستخدم نتائج pip-audit وBandit وGitleaks عند توفرها. لا تنفذ استغلالاً أو اختباراً نشطاً ولا تكشف قيمة سر. إذا لم يفحص تاريخ Git فاكتب ذلك صراحة. لا تصف التطبيق بأنه آمن بالكامل بناءً على فحص واحد.\n\nأخرج JSON يتضمن finding وevidence وseverity وremediation وverification_needed.\n\nضوابط تنفيذ إضافية إلزامية:\n- حلّل فقط كائن JSON المصغّر الذي تستلمه في ai_context، ولا تطلب أو تخمّن بيانات حساسة محذوفة.\n- لا تستخدم أدوات خارجية ولا تنفذ أوامر أو تغييرات؛ لا توجد أدوات تنفيذ موصولة بك.\n- لا تغيّر الحالة الحتمية أو تستبدل قرار كود التحقق. اكتب رأياً تفسيرياً مساعداً فقط.\n- لا تدّع أن فحصاً أو اتصالاً أو اختباراً قد حدث ما لم يظهر في مدخلاتك دليل صريح.\n- عند نقص الدليل، قل ذلك بوضوح. أخرج JSON صحيحاً قدر الإمكان، دون Markdown fences.",
+          "maxIterations": 3,
+          "returnIntermediateSteps": false,
+          "enableStreaming": false,
+          "autoSaveHighlightedData": false
+        }
+      },
+      "id": "02-ai-agent",
+      "name": "AI Agent - Advisory",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1270,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "options": {
+          "temperature": 0.2,
+          "maxTokens": 900,
+          "timeout": 60000,
+          "maxRetries": 1
+        }
+      },
+      "id": "02-openai-chat-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1280,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const baseline = $('Evaluate request').first().json;\nconst content = (typeof $json.output === 'string' && $json.output.trim()) ? $json.output.trim() : null;\nconst failed = !content || Boolean($json.error);\nreturn [{ json: {\n  ...baseline,\n  ai_advisory: {\n    provider: 'OpenAI',\n    status: failed ? 'unavailable' : 'completed',\n    content: content,\n    note: failed ? 'تعذر الحصول على تحليل النموذج؛ تم الاحتفاظ بنتيجة التحقق الحتمية.' : 'هذه توصية تفسيرية فقط ولا تغيّر نتيجة التحقق الحتمية.',\n  },\n  execution_authority: 'read_only_advisory',\n  side_effects_performed: false,\n} }];"
+      },
+      "id": "02-finalize-ai-advice",
+      "name": "Finalize AI Advisory",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1550,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch repository tree",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch repository tree": {
+      "main": [
+        [
+          {
+            "node": "Evaluate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger - Safe Smoke Test": {
+      "main": [
+        [
+          {
+            "node": "Fetch repository tree",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate request": {
+      "main": [
+        [
+          {
+            "node": "Prepare Minimized AI Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Minimized AI Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Advisory",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Advisory": {
+      "main": [
+        [
+          {
+            "node": "Finalize AI Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize AI Advisory": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "02-security-auditor-n8n2495-ai-v1",
+  "meta": {
+    "description": "Read-only path hygiene scan. Not a source secret scan.. OpenAI AI Agent advisory attached; deterministic checks preserved; webhook uses local Header Auth credential bound by updater; inactive by default.",
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
