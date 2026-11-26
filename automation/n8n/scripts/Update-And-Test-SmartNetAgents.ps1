@@ -173,13 +173,12 @@ try {
     })
     $OpenAiCredential = Select-Credential -Candidates $OpenAiCandidates -Label "OpenAI API"
 
-    $HeaderCandidates = @($CredentialRecords | Where-Object { $_.type -eq "httpHeaderAuth" } | ForEach-Object {
+    $HeaderCandidates = @($CredentialRecords | Where-Object {
+        $_.type -eq "httpHeaderAuth" -and $_.name -eq "SmartNet Agents Header Auth"
+    } | ForEach-Object {
         [pscustomobject]@{ id = [string]$_.id; name = [string]$_.name }
     })
-    $HeaderCredential = Select-Credential -Candidates $HeaderCandidates -Label "Webhook Header Auth" -ForceSelection
-    if ($HeaderCredential.name -ne "SmartNet Agents Header Auth") {
-        throw "Create a dedicated n8n Header Auth credential named SmartNet Agents Header Auth, with header X-SmartNet-Agent-Key, then rerun. No workflows were updated."
-    }
+    $HeaderCredential = Select-Credential -Candidates $HeaderCandidates -Label "dedicated SmartNet Agents Header Auth" -ForceSelection
     if (-not $OpenAiCredential.id -or -not $HeaderCredential.id) {
         throw "Local credential metadata is incomplete. No workflows were updated."
     }
@@ -239,8 +238,10 @@ try {
         $stagedPath = Join-Path $Staging $file
         $source = Read-JsonFile $stagedPath
         $originalPath = $LocalByName[[string]$source.name].path
-        Invoke-N8n @("import:workflow", "--input=$stagedPath")
+        # Register the backup before import so rollback also covers a command that
+        # reports failure after partially changing the current workflow record.
         $Updated += [pscustomobject]@{ name = $source.name; id = [string]$source.id; originalPath = $originalPath }
+        Invoke-N8n @("import:workflow", "--input=$stagedPath")
     }
 
     Write-Host ""
