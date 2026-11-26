@@ -105,8 +105,6 @@
           "value": "gpt-6-luna"
         },
         "options": {
-          "temperature": 0.2,
-          "maxTokens": 900,
           "timeout": 60000,
           "maxRetries": 1
         }
