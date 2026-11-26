@@ -139,8 +139,12 @@ def main() -> None:
             fail(f"{path.name}: AI Agent must use n8n 2.49.5-compatible version 3.1")
         if model.get("typeVersion") != 1.2:
             fail(f"{path.name}: OpenAI Chat Model must use n8n 2.49.5-compatible version 1.2")
-        if model.get("parameters", {}).get("model", {}).get("value") != "gpt-6-luna":
-            fail(f"{path.name}: expected the selected baseline model gpt-6-luna")
+        model_selector = model.get("parameters", {}).get("model", {})
+        if model_selector.get("value") != "gpt-6-luna" or model_selector.get("mode") != "id":
+            fail(f"{path.name}: expected the current OpenAI model ID gpt-6-luna")
+        model_options = model.get("parameters", {}).get("options", {})
+        if model_options.get("timeout") != 60000 or model_options.get("maxRetries") != 1:
+            fail(f"{path.name}: model timeout/retry policy must remain bounded")
         if agent.get("parameters", {}).get("promptType") != "define":
             fail(f"{path.name}: AI Agent must use an explicitly defined prompt")
         agent_options = agent.get("parameters", {}).get("options", {})
@@ -217,6 +221,12 @@ def main() -> None:
             fail(f"Agent {agent_id} execution mode is not the guarded advisory mode")
         if entry.get("credential_binding") is None:
             fail(f"Agent {agent_id} must document local-only credential binding")
+        if entry.get("model") != "gpt-6-luna":
+            fail(f"Agent {agent_id} registry model must be gpt-6-luna")
+        if entry.get("ai_agent_node_version") != "3.1" or entry.get("chat_model_node_version") != "1.2":
+            fail(f"Agent {agent_id} registry node versions are not compatible with n8n 2.49.5")
+        if entry.get("webhook_authentication") != "headerAuth":
+            fail(f"Agent {agent_id} registry must require Header Auth")
 
     print(
         f"Validated {len(files)} inactive n8n workflows: "
