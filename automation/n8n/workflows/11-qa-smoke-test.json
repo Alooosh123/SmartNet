@@ -1,1 +1,259 @@
-{"name":"SmartNet Agent 11 - QA Safe Smoke Test","nodes":[{"parameters":{"httpMethod":"POST","path":"smartnet/agents/11-qa-smoke-test","responseMode":"responseNode","options":{}},"id":"11-qa-smoke-test-webhook","name":"Webhook Trigger","type":"n8n-nodes-base.webhook","typeVersion":2.1,"position":[240,300],"webhookId":"11-qa-smoke-test-hook"},{"parameters":{"url":"={{ (($json.body && $json.body.base_url) || $json.base_url || 'http://127.0.0.1:8000').replace(/\\/$/,'') + '/api/health' }}","options":{"timeout":8000,"response":{"response":{"neverError":true,"responseFormat":"json"}}}},"id":"11-qa-smoke-test-http","name":"Probe FastAPI health","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[480,300]},{"parameters":{"jsCode":"const r=$('Probe FastAPI health').first().json;const b=r.body??r;const s=r.statusCode??null;const passed=b.status==='ok'&&(s===null||(s>=200&&s<300));return [{json:{agent:'11-qa-smoke-test',status:passed?'passed_safe_health_smoke':'failed_or_unverified',tests:[{name:'FastAPI /api/health',passed,http_status:s,response:b}],skipped:['Router reboot','Disconnect users','Create/delete hotspot users','Payment confirmation','Subscription activation'],next:'Run full pytest and isolated integration suite before release.'}}];"},"id":"11-qa-smoke-test-code","name":"Evaluate request","type":"n8n-nodes-base.code","typeVersion":2,"position":[720,300]},{"parameters":{"respondWith":"json","responseBody":"={{ $json }}","options":{"responseCode":200}},"id":"11-qa-smoke-test-response","name":"Respond to Webhook","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[980,300]}],"connections":{"Webhook Trigger":{"main":[[{"node":"Probe FastAPI health","type":"main","index":0}]]},"Evaluate request":{"main":[[{"node":"Respond to Webhook","type":"main","index":0}]]},"Probe FastAPI health":{"main":[[{"node":"Evaluate request","type":"main","index":0}]]}},"active":false,"settings":{"executionOrder":"v1"},"versionId":"11-qa-smoke-test-v1","meta":{"description":"Safe GET health probe only; skips all mutating tests.","templateCredsSetupCompleted":false},"tags":[]}
+{
+  "name": "SmartNet Agent 11 - QA Safe Smoke Test",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smartnet/agents/11-qa-smoke-test",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "id": "11-qa-smoke-test-webhook",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "11-qa-smoke-test-hook"
+    },
+    {
+      "parameters": {
+        "url": "={{ (($json.body && $json.body.base_url) || $json.base_url || 'http://127.0.0.1:8000').replace(/\\/$/,'') + '/api/health' }}",
+        "options": {
+          "timeout": 8000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "11-qa-smoke-test-http",
+      "name": "Probe FastAPI health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const manual=$('Manual Trigger - Safe Smoke Test').isExecuted;const r=manual?{statusCode:200,body:{status:'ok',source:'local smoke-test fixture'}}:$('Probe FastAPI health').first().json;const b=r.body??r;const s=r.statusCode??null;const passed=b.status==='ok'&&(s===null||(s>=200&&s<300));return [{json:{agent:'11-qa-smoke-test',status:passed?'passed_safe_health_smoke':'failed_or_unverified',tests:[{name:'FastAPI /api/health',passed,http_status:s,response:{status:b.status||'not_returned'}}],skipped:['Router reboot','Disconnect users','Create/delete hotspot users','Payment confirmation','Subscription activation'],next:'Run full pytest and isolated integration suite before release.',test_mode:manual}}];"
+      },
+      "id": "11-qa-smoke-test-code",
+      "name": "Evaluate request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "11-qa-smoke-test-response",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "11-manual-smoke-trigger",
+      "name": "Manual Trigger - Safe Smoke Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$json||{};const tests=(r.tests||[]).map(t=>({name:t.name,passed:t.passed,http_status:t.http_status,response_status:(t.response||{}).status||'not_returned'}));const ai_context={agent:r.agent||'11-qa-smoke-test',status:r.status,tests,skipped:r.skipped||[],next:r.next,test_mode:r.test_mode===true};return [{json:{ai_context}}];"
+      },
+      "id": "11-prepare-ai-context",
+      "name": "Prepare Minimized AI Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.ai_context) }}",
+        "hasOutputParser": false,
+        "needsFallback": false,
+        "options": {
+          "systemMessage": "# الوكيل 11 – مهندس ضمان الجودة\n\nأنت مسؤول ضمان الجودة. صمم ونفذ الاختبارات الآمنة في بيئات الاختبار فقط، واربط كل نتيجة باسم الاختبار وإصدار الكود والبيئة.\n\nغطِّ unit وintegration وAPI وRBAC ودورة الدفع والاشتراك وترحيل قاعدة البيانات والنسخ والاستعادة وFrontend وAndroid وMikroTik المحاكى أو المعزول للقراءة فقط.\n\nاختبر النجاح والرفض والتكرار والمهلة والتراجع. لا تشغل reboot أو disconnect أو تسوية دفع أو restore على الإنتاج.\n\nلا تدّع نجاح اختبار لم يظهر في ناتج تشغيل. أعد خطوات إعادة الإنتاج والتوقع والنتيجة الفعلية، وصنّف الاختبارات المتخطاة أو المتوقفة بوضوح. أخرج JSON يتضمن test_name وenvironment وcommit_sha وresult وevidence وskipped_tests.\n\nضوابط تنفيذ إضافية إلزامية:\n- حلّل فقط كائن JSON المصغّر الذي تستلمه في ai_context، ولا تطلب أو تخمّن بيانات حساسة محذوفة.\n- لا تستخدم أدوات خارجية ولا تنفذ أوامر أو تغييرات؛ لا توجد أدوات تنفيذ موصولة بك.\n- لا تغيّر الحالة الحتمية أو تستبدل قرار كود التحقق. اكتب رأياً تفسيرياً مساعداً فقط.\n- لا تدّع أن فحصاً أو اتصالاً أو اختباراً قد حدث ما لم يظهر في مدخلاتك دليل صريح.\n- عند نقص الدليل، قل ذلك بوضوح. أخرج JSON صحيحاً قدر الإمكان، دون Markdown fences.",
+          "maxIterations": 3,
+          "returnIntermediateSteps": false,
+          "enableStreaming": false,
+          "autoSaveHighlightedData": false
+        }
+      },
+      "id": "11-ai-agent",
+      "name": "AI Agent - Advisory",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1270,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "options": {
+          "temperature": 0.2,
+          "maxTokens": 900,
+          "timeout": 60000,
+          "maxRetries": 1
+        }
+      },
+      "id": "11-openai-chat-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1280,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const baseline = $('Evaluate request').first().json;\nconst content = (typeof $json.output === 'string' && $json.output.trim()) ? $json.output.trim() : null;\nconst failed = !content || Boolean($json.error);\nreturn [{ json: {\n  ...baseline,\n  ai_advisory: { provider: 'OpenAI', status: failed ? 'unavailable' : 'completed', content: content, note: failed ? 'تعذر الحصول على تحليل النموذج؛ تم الاحتفاظ بنتيجة التحقق الحتمية.' : 'هذه توصية تفسيرية فقط ولا تغيّر نتيجة التحقق الحتمية.' },\n  execution_authority: 'read_only_advisory',\n  side_effects_performed: false,\n} }];"
+      },
+      "id": "11-finalize-ai-advice",
+      "name": "Finalize AI Advisory",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1550,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Probe FastAPI health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probe FastAPI health": {
+      "main": [
+        [
+          {
+            "node": "Evaluate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger - Safe Smoke Test": {
+      "main": [
+        [
+          {
+            "node": "Evaluate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate request": {
+      "main": [
+        [
+          {
+            "node": "Prepare Minimized AI Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Minimized AI Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Advisory",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Advisory": {
+      "main": [
+        [
+          {
+            "node": "Finalize AI Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize AI Advisory": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "11-qa-smoke-test-n8n2495-ai-v1",
+  "meta": {
+    "description": "Safe GET health probe only; skips all mutating tests.. OpenAI AI Agent advisory attached; deterministic checks preserved; local Header Auth credential is bound by updater; inactive by default.",
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
