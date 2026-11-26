@@ -166,7 +166,7 @@ def main() -> None:
 
         if not has_edge(connections, model["name"], "ai_languageModel", agent["name"]):
             fail(f"{path.name}: OpenAI Chat Model is not connected to AI Agent")
-        if has_edge(connections, agent["name"], "ai_tool", "any"):
+        if any("ai_tool" in groups for groups in connections.values()):
             fail(f"{path.name}: AI Agent must not receive an execution tool")
         if not has_edge(connections, agent["name"], "main", "Finalize AI Advisory"):
             fail(f"{path.name}: AI Agent output must pass through Finalize AI Advisory")
